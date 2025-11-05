@@ -13,3 +13,7 @@ see the [add-to-app documentation](https://flutter.dev/to/add-to-app).
 How to run node
   ->  cd .\Backend\   
   ->  cd node server.js
+
+ALTER TABLE request_history AUTO_INCREMENT = 0; 
+ALTER TABLE borrow_requests AUTO_INCREMENT = 0;
+ALTER TABLE assets AUTO_INCREMENT = 0;

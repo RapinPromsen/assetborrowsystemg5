@@ -17,13 +17,36 @@ const upload = multer({ storage });
 
 // ดึงรายการครุภัณฑ์
 router.get("/assets", verifyToken, (req, res) => {
-  let sql = "SELECT * FROM assets";
-  if (req.user.role === "student") sql += " WHERE status = 'Available'";
-  db.query(sql, (err, results) => {
-    if (err) return res.status(500).json({ message: "Database error" });
+  const userId = req.user.id;
+  const userRole = req.user.role;
+
+  // ถ้าเป็น student ให้ดูเฉพาะที่ available หรือของตัวเอง
+  let sql;
+  let params = [];
+
+  if (userRole === "STUDENT") {
+    sql = `
+      SELECT a.*, br.status AS borrow_status
+      FROM assets a
+      LEFT JOIN borrow_requests br
+        ON a.id = br.asset_id AND br.requester_id = ?
+      WHERE a.status = 'available' OR br.status IN ('pending', 'approved')
+    `;
+    params = [userId];
+  } else {
+    sql = "SELECT * FROM assets";
+  }
+
+  db.query(sql, params, (err, results) => {
+    if (err) {
+      console.error("❌ [DB] Error fetching assets:", err);
+      return res.status(500).json({ message: "Database error" });
+    }
+    console.log(`📦 [ASSETS] Fetched ${results.length} items for ${userRole} (${userId})`);
     res.json(results);
   });
 });
+
 
 // เพิ่มครุภัณฑ์ (เฉพาะ Staff)
 router.post(
@@ -86,6 +109,7 @@ router.post(
 );
 
 // แก้ไขครุภัณฑ์ (เฉพาะ Staff)
+// แก้ไขครุภัณฑ์ (เฉพาะ Staff)
 router.put(
   "/assets/:id",
   verifyToken,
@@ -93,20 +117,31 @@ router.put(
   upload.single("image"),
   (req, res) => {
     const { id } = req.params;
-    const { name, description, status } = req.body;
+    let { name, description, status } = req.body;
     const imageUrl = req.file ? `/uploads/${req.file.filename}` : null;
+
+    console.log(`🟡 [UPDATE] Asset #${id} → name="${name}", status="${status}"`);
+
+    // ✅ ตรวจสอบค่า status ก่อนอัปเดต (กัน error ENUM)
+    const validStatuses = ["available", "pending", "borrowed", "disabled"];
+    if (!validStatuses.includes((status || "").toLowerCase())) {
+      console.warn(
+        `⚠️ [UPDATE] Invalid status '${status}' → defaulted to 'available'`
+      );
+      status = "available";
+    }
 
     // ✅ ดึงชื่อไฟล์เก่าก่อนอัปเดต
     const getOldImageSql = "SELECT image_url FROM assets WHERE id = ?";
     db.query(getOldImageSql, [id], (err, results) => {
       if (err) {
-        console.error("❌ Database Error:", err);
+        console.error("❌ Database Error (getOldImage):", err);
         return res.status(500).json({ message: "Database error" });
       }
 
       const oldImagePath = results[0]?.image_url;
 
-      // ✅ อัปเดตข้อมูลใหม่
+      // ✅ เตรียมคำสั่ง SQL
       const sql = imageUrl
         ? "UPDATE assets SET name=?, description=?, status=?, image_url=? WHERE id=?"
         : "UPDATE assets SET name=?, description=?, status=? WHERE id=?";
@@ -115,25 +150,35 @@ router.put(
         ? [name, description, status, imageUrl, id]
         : [name, description, status, id];
 
+      console.log("🧩 [UPDATE] SQL:", sql);
+      console.log("🧩 [UPDATE] Values:", values);
+
       db.query(sql, values, (err) => {
         if (err) {
-          console.error("❌ Database Error:", err);
+          console.error("❌ Database Error (update):", err);
           return res.status(500).json({ message: "Database error" });
         }
 
         // ✅ ลบรูปเก่า (เฉพาะกรณีที่อัปโหลดใหม่)
-        if (imageUrl && oldImagePath && fs.existsSync(path.join(process.cwd(), oldImagePath))) {
+        if (
+          imageUrl &&
+          oldImagePath &&
+          fs.existsSync(path.join(process.cwd(), oldImagePath))
+        ) {
           fs.unlink(path.join(process.cwd(), oldImagePath), (err) => {
-            if (err) console.error("⚠️ Failed to delete old image:", err);
+            if (err)
+              console.error("⚠️ Failed to delete old image:", err);
             else console.log(`🗑️ Deleted old image: ${oldImagePath}`);
           });
         }
 
+        console.log(`✅ [UPDATE] Asset #${id} updated successfully`);
         res.json({ message: "✅ Asset updated successfully" });
       });
     });
   }
 );
+
 
 // ลบครุภัณฑ์ (เฉพาะ Staff)
 router.delete("/assets/:id", verifyToken, authorizeRole("STAFF"), (req, res) => {

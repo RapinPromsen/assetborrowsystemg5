@@ -282,9 +282,6 @@ extension StaffAssetDialogExtension on _StaffAssetListState {
         return EditAssetDialog(
           asset: asset,
           onSave: (updatedAsset) {
-            setState(() {
-              assets[index] = updatedAsset;
-            });
           },
         );
       },
