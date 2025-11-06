@@ -34,34 +34,6 @@ class BorrowService {
     throw Exception(data['message'] ?? 'Borrow request failed');
   }
 
-  // ======================================================
-  // 📜 View My Borrow History
-  // ======================================================
-  static Future<List<dynamic>> getMyHistory() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('token');
-    if (token == null) throw Exception("Token not found");
-
-    final url = Uri.parse('$baseUrl/history');
-    print("📜 [GET] $url");
-
-    final response = await http.get(
-      url,
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token',
-      },
-    );
-
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      print('✅ [HISTORY] ${data.length} records found');
-      return data;
-    } else {
-      print('❌ [HISTORY] Failed: ${response.statusCode}');
-      throw Exception('Failed to fetch history');
-    }
-  }
 
   // ======================================================
   // 👨‍🏫 Lecturer: Approve Request
