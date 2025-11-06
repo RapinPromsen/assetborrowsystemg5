@@ -134,8 +134,11 @@ router.put("/borrow/approve/:id", verifyToken, authorizeRole("LECTURER"), (req, 
           return res.status(500).json({ message: "Failed to update asset status" });
         }
 
-        console.log(`✅ [APPROVED] Request #${id} approved by lecturer #${lecturer_id}`);
-        res.json({ message: "Borrow request approved", note });
+        console.log(
+  `✅ [APPROVED] Request #${id} approved by lecturer #${lecturer_id}` +
+  (note ? ` | 📝 Note: ${note}` : " | (no note)")
+);
+res.json({ message: "Borrow request approved", note });
       });
     });
   });
@@ -183,8 +186,12 @@ router.put("/borrow/reject/:id", verifyToken, authorizeRole("LECTURER"), (req, r
           return res.status(500).json({ message: "Failed to update asset status" });
         }
 
-        console.log(`🚫 [REJECTED] Request #${id} rejected by lecturer #${lecturer_id}`);
-        res.json({ message: "Borrow request rejected", note });
+        console.log(
+  `🚫 [REJECTED] Request #${id} rejected by lecturer #${lecturer_id}` +
+  (note ? ` | 📝 Reason: ${note}` : " | (no note provided)")
+);
+res.json({ message: "Borrow request rejected", note });
+
       });
     });
   });
@@ -204,7 +211,7 @@ router.put("/return/:id", verifyToken, authorizeRole("STAFF"), (req, res) => {
     SELECT br.asset_id, br.status, a.name AS asset_name
     FROM borrow_requests br
     JOIN assets a ON br.asset_id = a.id
-    WHERE br.id = ? AND br.status = 'approved'
+    WHERE br.id = ? AND br.status IN ('approved', 'borrowed')
   `;
   
   db.query(checkSql, [id], (err, result) => {

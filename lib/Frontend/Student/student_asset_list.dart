@@ -237,31 +237,38 @@ List<Map<String, dynamic>> get filteredAssets {
                                 splashColor: Colors.transparent,
                                 highlightColor: Colors.transparent,
                                 onTap: () {
-                                 if (asset['status'] == AssetStatus.available) {
+                        if (asset['status'] == AssetStatus.available) {
   showDialog(
     context: context,
     builder: (context) => BorrowAssetDialog(
       asset: asset,
-      onConfirm: (newRequest) {
+      onConfirm: (newRequest) async {
         setState(() {
-          final oldDesc = assets[index]['description']; // เก็บ description เดิมไว้
+          final oldDesc = assets[index]['description'];
           assets[index] = {
-            ...assets[index],          // คงข้อมูลเดิม
-            ...newRequest,             // รวมข้อมูลใหม่
-            'description': oldDesc,    // ทับ description เดิม
+            ...assets[index],
+            ...newRequest,
+            'description': oldDesc,
           };
         });
       },
     ),
-  );
+  ).then((_) {
+    // 🔄 รีแบบเร็วมาก — ไม่มีวงหมุน ไม่มี delay
+    Future.microtask(() => _fetchAssets());
+  });
 } else if (asset['status'] == AssetStatus.pending) {
   showDialog(
     context: context,
     builder: (context) => PendingDetailDialog(
       asset: asset,
     ),
-  );
-} else {
+  ).then((_) {
+    // 🔄 รีแบบเร็วมาก
+    Future.microtask(() => _fetchAssets());
+  });
+}
+ else {
   ScaffoldMessenger.of(context).showSnackBar(
     SnackBar(
       content: Text('${asset['name']} is not available for borrowing.'),
@@ -269,6 +276,7 @@ List<Map<String, dynamic>> get filteredAssets {
     ),
   );
 }
+
                                 },
                                 child: Container(
                                   margin: const EdgeInsets.only(bottom: 16),

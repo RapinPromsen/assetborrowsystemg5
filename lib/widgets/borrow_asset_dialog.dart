@@ -24,7 +24,6 @@ class _BorrowAssetDialogState extends State<BorrowAssetDialog> {
   @override
   void initState() {
     super.initState();
-
     final now = DateTime.now();
     final tomorrow = now.add(const Duration(days: 1));
     borrowDate = DateFormat('dd/MM/yy').format(now);
@@ -34,19 +33,16 @@ class _BorrowAssetDialogState extends State<BorrowAssetDialog> {
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       insetPadding: const EdgeInsets.all(24),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(
-          maxWidth: 400,
-          maxHeight: 420, // เพิ่มความสูงเล็กน้อย
-        ),
+        constraints: const BoxConstraints(maxWidth: 420),
         child: SingleChildScrollView(
-          // ✅ ห่อด้วย ScrollView
           child: Padding(
-            padding: const EdgeInsets.all(20.0),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
             child: Column(
-              mainAxisSize: MainAxisSize.min, // ✅ ปรับให้ยืดเท่าที่จำเป็น
+              mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // 🏷️ Header
@@ -56,64 +52,102 @@ class _BorrowAssetDialogState extends State<BorrowAssetDialog> {
                     const Text(
                       'Borrow Asset',
                       style: TextStyle(
-                        fontSize: 20,
+                        fontSize: 22,
                         fontWeight: FontWeight.bold,
+                        color: Color(0xFF1E293B),
                       ),
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.close),
-                      onPressed: () => Navigator.pop(context),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade200,
+                        shape: BoxShape.circle,
+                      ),
+                      child: IconButton(
+                        icon: const Icon(Icons.close, color: Colors.black87),
+                        onPressed: () => Navigator.pop(context),
+                      ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 20),
 
                 // 📷 Image
                 Center(
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child: Image.network(
-                      widget.asset['image'] ?? '',
-                      height: 120,
-                      width: 120,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) {
-                        return Container(
-                          height: 120,
-                          width: 120,
-                          color: Colors.grey[300],
-                          child: const Icon(
-                            Icons.camera_alt,
-                            color: Colors.grey,
-                          ),
-                        );
-                      },
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 10,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Image.network(
+                        widget.asset['image'] ?? '',
+                        height: 140,
+                        width: 140,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(
+                            height: 140,
+                            width: 140,
+                            color: Colors.grey[200],
+                            child: const Icon(
+                              Icons.camera_alt,
+                              color: Colors.grey,
+                              size: 50,
+                            ),
+                          );
+                        },
+                      ),
                     ),
                   ),
                 ),
-                const SizedBox(height: 20),
 
-                // 📄 รายละเอียด
-                Text(
-                  'Asset name: ${widget.asset['name']}',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
-                ),
+                const SizedBox(height: 24),
+                Divider(color: Colors.grey.shade300, height: 1),
+                const SizedBox(height: 16),
+
+                // 📄 Details
+                _buildInfoRow('Asset name:', widget.asset['name']),
                 const SizedBox(height: 12),
 
-                Text(
-                  'Borrow date: $borrowDate',
-                  style: const TextStyle(fontSize: 14),
+                const Text(
+                  'Description:',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                    color: Color(0xFF1E293B),
+                  ),
                 ),
                 const SizedBox(height: 6),
-
-                Text(
-                  'Return date: $returnDate',
-                  style: const TextStyle(fontSize: 14),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    widget.asset['description'] ?? 'No description available.',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Color(0xFF334155),
+                    ),
+                    softWrap: true,
+                    overflow: TextOverflow.visible,
+                  ),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 16),
+
+                _buildInfoRow('Borrow date:', borrowDate),
+                const SizedBox(height: 8),
+                _buildInfoRow('Return date:', returnDate),
+                const SizedBox(height: 24),
 
                 // 🔘 Buttons
                 Row(
@@ -121,19 +155,18 @@ class _BorrowAssetDialogState extends State<BorrowAssetDialog> {
                   children: [
                     TextButton(
                       onPressed: () => Navigator.pop(context),
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.grey[700],
+                      ),
                       child: const Text('Cancel'),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 12),
                     ElevatedButton(
                       onPressed: () async {
                         try {
-                          // 🌀 เรียก API ส่งคำขอยืม
-                          final result =
-                              await BorrowService.createBorrowRequest(
-                                widget.asset['id'],
-                              );
-
-                          // ✅ ถ้าสำเร็จ แสดง snackbar
+                          final result = await BorrowService.createBorrowRequest(
+                            widget.asset['id'],
+                          );
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
                               content: Text(
@@ -142,12 +175,9 @@ class _BorrowAssetDialogState extends State<BorrowAssetDialog> {
                               backgroundColor: Colors.green,
                             ),
                           );
-
-                          // ปิด dialog แล้วอัปเดตหน้า
                           widget.onConfirm(result);
                           Navigator.pop(context);
                         } catch (e) {
-                          // ❌ ถ้า error แสดงข้อความ
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
                               content: Text('Error: $e'),
@@ -163,11 +193,15 @@ class _BorrowAssetDialogState extends State<BorrowAssetDialog> {
                           borderRadius: BorderRadius.circular(8),
                         ),
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 10,
+                          horizontal: 20,
+                          vertical: 12,
                         ),
+                        elevation: 0,
                       ),
-                      child: const Text('Send Request'),
+                      child: const Text(
+                        'Send Request',
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                      ),
                     ),
                   ],
                 ),
@@ -175,6 +209,29 @@ class _BorrowAssetDialogState extends State<BorrowAssetDialog> {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  // ✅ Helper widget for uniform info rows
+  Widget _buildInfoRow(String title, String? value) {
+    return RichText(
+      text: TextSpan(
+        style: const TextStyle(
+          fontSize: 15,
+          color: Color(0xFF334155),
+          height: 1.5,
+        ),
+        children: [
+          TextSpan(
+            text: '$title ',
+            style: const TextStyle(
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF1E293B),
+            ),
+          ),
+          TextSpan(text: value ?? '-'),
+        ],
       ),
     );
   }

@@ -18,17 +18,23 @@ router.get(
 
     console.log(`📜 [HISTORY] Role=${roleUpper}, UserID=${user_id}`);
 
+    // 🧩 Base SQL
     let sql = `
       SELECT 
         br.id AS request_id,
         a.name AS asset_name,
-        br.status,
+        -- ✅ แปลง status ตาม role ที่เห็น
+        CASE 
+          WHEN br.status = 'approved' AND '${roleUpper}' IN ('STUDENT', 'STAFF')
+            THEN 'borrowed'
+          ELSE br.status
+        END AS status,
         DATE_FORMAT(br.borrow_date, '%Y-%m-%d') AS borrow_date,
         DATE_FORMAT(br.return_date, '%Y-%m-%d') AS return_date,
-        u.username AS requester_name,
-        l.username AS approved_by,
-        s.username AS got_back_by,
-        br.decision_note
+        u.full_name AS requester_name,
+        l.full_name AS approved_by,
+        s.full_name AS got_back_by,
+        br.decision_note AS decision_note
       FROM borrow_requests br
       JOIN assets a ON br.asset_id = a.id
       LEFT JOIN users u ON br.requester_id = u.id

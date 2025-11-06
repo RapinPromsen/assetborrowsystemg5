@@ -18,23 +18,39 @@ const upload = multer({ storage });
 // ดึงรายการครุภัณฑ์
 router.get("/assets", verifyToken, (req, res) => {
   const userId = req.user.id;
-  const userRole = req.user.role;
+  const userRole = req.user.role.toUpperCase();
 
-  // ถ้าเป็น student ให้ดูเฉพาะที่ available หรือของตัวเอง
   let sql;
   let params = [];
 
   if (userRole === "STUDENT") {
+    // 🧩 นักเรียนเห็นเฉพาะ:
+    // - สินทรัพย์ available
+    // - สินทรัพย์ที่ตัวเองยืม (pending / approved)
+    // ❌ ไม่เห็น pending ของคนอื่น
+    // ❌ ไม่เห็น disabled
     sql = `
-      SELECT a.*, br.status AS borrow_status
+      SELECT 
+        a.id, a.name, a.image_url, a.description,
+        CASE
+          WHEN br.requester_id = ? AND br.status = 'pending' THEN 'pending'
+          WHEN br.requester_id = ? AND br.status = 'approved' THEN 'borrowed'
+          ELSE a.status
+        END AS status
       FROM assets a
-      LEFT JOIN borrow_requests br
-        ON a.id = br.asset_id AND br.requester_id = ?
-      WHERE a.status = 'available' OR br.status IN ('pending', 'approved')
+      LEFT JOIN borrow_requests br 
+        ON a.id = br.asset_id 
+        AND br.status IN ('pending', 'approved')
+      WHERE a.status != 'disabled'
     `;
-    params = [userId];
+    params = [userId, userId];
   } else {
-    sql = "SELECT * FROM assets";
+    // 👨‍🏫 Lecturer และ 🧑‍🔧 Staff เห็นทุกอย่าง
+    sql = `
+      SELECT 
+        a.id, a.name, a.image_url, a.description, a.status
+      FROM assets a
+    `;
   }
 
   db.query(sql, params, (err, results) => {
@@ -42,10 +58,18 @@ router.get("/assets", verifyToken, (req, res) => {
       console.error("❌ [DB] Error fetching assets:", err);
       return res.status(500).json({ message: "Database error" });
     }
-    console.log(`📦 [ASSETS] Fetched ${results.length} items for ${userRole} (${userId})`);
+
+    console.log(
+      `📦 [ASSETS] Role=${userRole} | UserID=${userId} | ${results.length} records fetched`
+    );
+    results.forEach((r) =>
+      console.log(`   🔹 Asset #${r.id} (${r.name}) → ${r.status}`)
+    );
+
     res.json(results);
   });
 });
+
 
 
 // เพิ่มครุภัณฑ์ (เฉพาะ Staff)
