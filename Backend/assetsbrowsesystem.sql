@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1:3306
--- Generation Time: Nov 06, 2025 at 04:34 AM
+-- Generation Time: Nov 06, 2025 at 06:00 PM
 -- Server version: 8.4.3
 -- PHP Version: 8.3.26
 
@@ -42,10 +42,11 @@ CREATE TABLE `assets` (
 --
 
 INSERT INTO `assets` (`id`, `code`, `name`, `description`, `status`, `image_url`, `created_at`) VALUES
-(2, 'AS-002', 'Camera', NULL, 'disabled', '/uploads/1761809104954.png', '2025-10-30 07:25:04'),
-(3, 'AS-003', 'Camera', NULL, 'available', '/uploads/1761809105815.png', '2025-10-30 07:25:05'),
-(4, 'AS-004', 'Camera', NULL, 'available', '/uploads/1761809106627.png', '2025-10-30 07:25:06'),
-(5, 'AS-005', 'Router', 'TEST', 'available', '/uploads/1762105726451.png', '2025-10-30 07:25:07');
+(1, 'AS-001', 'Camera', 'DSLR camera with 32.5 MP APS-C sensor and 18-55 mm kit lens — ideal for photography or video recording.', 'available', '/uploads/1762446347884.jpeg', '2025-11-06 16:25:47'),
+(2, 'AS-002', 'Rode NT1-A', 'Studio-grade condenser microphone with ultra-low noise — perfect for podcasting and vocal recording.', 'available', '/uploads/1762446486172.webp', '2025-11-06 16:28:06'),
+(3, 'AS-003', 'BenQ MH550 Projector', 'Full HD 1080p projector, 3500 lumens brightness, great for classrooms and meeting rooms.', 'available', '/uploads/1762446670744.jpg', '2025-11-06 16:31:10'),
+(4, 'AS-004', 'Manfrotto 290 Tripod', 'Durable aluminum tripod, 3-section legs, supports up to 5 kg — stable and portable.', 'available', '/uploads/1762446709984.webp', '2025-11-06 16:31:49'),
+(5, 'AS-005', 'Dell XPS 13 Laptop', 'Ultraportable laptop with Intel Core i7 and 16 GB RAM — suitable for presentations and light editing tasks.', 'disabled', '/uploads/1762446737111.jpg', '2025-11-06 16:32:17');
 
 -- --------------------------------------------------------
 
@@ -59,7 +60,7 @@ CREATE TABLE `borrow_requests` (
   `asset_id` int NOT NULL,
   `borrow_date` date NOT NULL,
   `return_date` date NOT NULL,
-  `status` enum('pending','approved','rejected','returned') DEFAULT 'pending',
+  `status` varchar(20) DEFAULT NULL,
   `decided_by` int DEFAULT NULL,
   `got_back_by` int DEFAULT NULL,
   `decided_at` datetime DEFAULT NULL,
@@ -72,7 +73,7 @@ CREATE TABLE `borrow_requests` (
 --
 
 INSERT INTO `borrow_requests` (`id`, `requester_id`, `asset_id`, `borrow_date`, `return_date`, `status`, `decided_by`, `got_back_by`, `decided_at`, `decision_note`, `created_at`) VALUES
-(4, 3, 3, '2025-11-06', '2025-11-06', 'returned', 2, 1, '2025-11-06 03:23:36', 'Very Good', '2025-11-05 20:21:52');
+(4, 3, 1, '2025-11-07', '2025-11-07', 'returned', 2, 1, '2025-11-07 00:35:05', 'Very Good', '2025-11-06 17:24:20');
 
 -- --------------------------------------------------------
 
@@ -95,7 +96,7 @@ CREATE TABLE `request_history` (
 --
 
 INSERT INTO `request_history` (`id`, `request_id`, `old_status`, `new_status`, `changed_by_id`, `changed_at`, `note`) VALUES
-(2, 4, 'approved', 'returned', 1, '2025-11-05 20:23:36', 'Returned by staff');
+(3, 4, 'approved', 'returned', 1, '2025-11-06 17:35:05', 'Returned by staff');
 
 -- --------------------------------------------------------
 
@@ -122,7 +123,8 @@ INSERT INTO `users` (`id`, `full_name`, `username`, `password`, `role`, `created
 (3, 'Student One', 'student1', '$2b$10$rnvjbIPhm0toUKEkPF0IaOoPfp2pWX1/E.733/gaN4Yl14DdiYS/S', 'STUDENT', '2025-10-30 07:24:12'),
 (4, 'test', 'test123', '$2b$10$oziqJ99L3O6F92fPx2h3seM3sHk/oPIhcwvSGg4cDHStxYSDFEBM2', 'STUDENT', '2025-10-31 02:06:35'),
 (5, 'test123123', 'test2222', '$2b$10$6dnUZaC8gPQyk423TzIrieCevyMhcDQyX3RfD.W6/lITY9jqCxYqC', 'STUDENT', '2025-10-31 03:19:38'),
-(6, 'test1231', 'test2', '$2b$10$0YWZiykrWEBk24qRMUkQPussjIt/FSGnb8bajMgYAfSHIiHRj.myy', 'STUDENT', '2025-10-31 03:43:49');
+(6, 'test1231', 'test2', '$2b$10$0YWZiykrWEBk24qRMUkQPussjIt/FSGnb8bajMgYAfSHIiHRj.myy', 'STUDENT', '2025-10-31 03:43:49'),
+(7, 'lecturer2', 'lecturer2', '$2b$10$YKT0neO55LLatkci.oZ7fugRQRkl6iDnuy97SOnx7oiurEp8sQtD2', 'LECTURER', '2025-11-06 06:10:45');
 
 --
 -- Indexes for dumped tables
@@ -179,13 +181,13 @@ ALTER TABLE `borrow_requests`
 -- AUTO_INCREMENT for table `request_history`
 --
 ALTER TABLE `request_history`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
 
 --
 -- AUTO_INCREMENT for table `users`
 --
 ALTER TABLE `users`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=9;
 
 --
 -- Constraints for dumped tables

@@ -237,7 +237,7 @@ List<Map<String, dynamic>> get filteredAssets {
                                 splashColor: Colors.transparent,
                                 highlightColor: Colors.transparent,
                                 onTap: () {
-                        if (asset['status'] == AssetStatus.available) {
+                       if (asset['status'] == AssetStatus.available) {
   showDialog(
     context: context,
     builder: (context) => BorrowAssetDialog(
@@ -257,7 +257,9 @@ List<Map<String, dynamic>> get filteredAssets {
     // 🔄 รีแบบเร็วมาก — ไม่มีวงหมุน ไม่มี delay
     Future.microtask(() => _fetchAssets());
   });
-} else if (asset['status'] == AssetStatus.pending) {
+} 
+// ✅ ทั้ง pending และ borrowed → ไป PendingDetailDialog
+else if (asset['status'] == AssetStatus.pending || asset['status'] == AssetStatus.borrowed) {
   showDialog(
     context: context,
     builder: (context) => PendingDetailDialog(
@@ -267,8 +269,9 @@ List<Map<String, dynamic>> get filteredAssets {
     // 🔄 รีแบบเร็วมาก
     Future.microtask(() => _fetchAssets());
   });
-}
- else {
+} 
+// ❌ เฉพาะกรณีอื่นเท่านั้นที่ไม่สามารถยืมได้
+else {
   ScaffoldMessenger.of(context).showSnackBar(
     SnackBar(
       content: Text('${asset['name']} is not available for borrowing.'),
@@ -276,6 +279,7 @@ List<Map<String, dynamic>> get filteredAssets {
     ),
   );
 }
+
 
                                 },
                                 child: Container(
