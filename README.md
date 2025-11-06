@@ -17,3 +17,4 @@ How to run node
 ALTER TABLE request_history AUTO_INCREMENT = 0; 
 ALTER TABLE borrow_requests AUTO_INCREMENT = 0;
 ALTER TABLE assets AUTO_INCREMENT = 0;
+

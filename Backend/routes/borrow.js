@@ -88,44 +88,8 @@ router.post("/borrow", verifyToken, authorizeRole("STUDENT"), (req, res) => {
   });
 });
 
-// ======================================================
-// 📜 STUDENT: ดูประวัติการยืมของตัวเอง
-// ======================================================
 
-router.get("/borrow/my", verifyToken, authorizeRole("STUDENT"), (req, res) => {
-  const student_id = req.user.id;
 
-  const sql = `
-    SELECT 
-      br.id AS request_id,
-      a.name AS asset_name,
-      br.status,
-      DATE_FORMAT(br.borrow_date, '%Y-%m-%d') AS borrow_date,
-      DATE_FORMAT(br.return_date, '%Y-%m-%d') AS return_date,
-      -- 👇 ผู้อนุมัติ (lecturer)
-      l.username AS approved_by,
-      -- 👇 ผู้รับคืน (staff)
-      s.username AS got_back_by
-    FROM borrow_requests br
-    JOIN assets a ON br.asset_id = a.id
-    LEFT JOIN users l ON br.decided_by = l.id AND br.status IN ('approved', 'rejected', 'returned')
-    LEFT JOIN request_history rh 
-        ON rh.request_id = br.id AND rh.new_status = 'returned'
-    LEFT JOIN users s ON rh.changed_by_id = s.id
-    WHERE br.requester_id = ?
-    ORDER BY br.borrow_date DESC
-  `;
-
-  db.query(sql, [student_id], (err, results) => {
-    if (err) {
-      console.error("❌ [DB] Error fetching borrow history:", err);
-      return res.status(500).json({ message: "Database error" });
-    }
-
-    console.log(`📜 [BORROW/MY] Found ${results.length} records for student #${student_id}`);
-    res.json(results);
-  });
-});
 
 
 // ======================================================
