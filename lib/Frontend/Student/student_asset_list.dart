@@ -59,8 +59,8 @@ Future<void> _fetchAssets() async {
       setState(() {
         assets = data.map((item) {
           final imagePath = item['image_url'] != null
-              ? 'http://192.168.10.212:5000${item['image_url']}'
-              : 'http://192.168.10.212:5000/uploads/no_image.png';
+              ? 'http://172.27.13.154:5000${item['image_url']}'
+              : 'http://172.27.13.154:5000/uploads/no_image.png';
 
           return {
             'id': item['id'],
