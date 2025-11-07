@@ -88,7 +88,7 @@ class _StaffHistoryState extends State<StaffHistory> {
         child: ListView(
           children: [
             const SizedBox(height: 16),
-            ...historyData.map((item) => HistoryCard(item: item)).toList(),
+            ...historyData.map((item) => HistoryCard(item: item)),
           ],
         ),
       ),

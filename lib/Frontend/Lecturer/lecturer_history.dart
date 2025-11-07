@@ -88,7 +88,7 @@ class _LecturerHistoryState extends State<LecturerHistory> {
         child: ListView(
           children: [
             const SizedBox(height: 16),
-            ...historyData.map((item) => HistoryCard(item: item)).toList(),
+            ...historyData.map((item) => HistoryCard(item: item)),
           ],
         ),
       ),

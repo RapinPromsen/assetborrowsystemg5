@@ -84,7 +84,7 @@ class _StudentRequestPageState extends State<StudentRequestPage> {
                     ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String>(
-                      value: selectedAsset,
+                      initialValue: selectedAsset,
                       decoration: InputDecoration(
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),

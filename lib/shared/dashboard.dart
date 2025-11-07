@@ -62,7 +62,7 @@ class _DashboardState extends State<Dashboard> {
                 final Offset position =
                     button.localToGlobal(Offset.zero, ancestor: overlay);
 
-                await ProfileMenu.show(context, position, fullName: '${widget.fullName}'); // ✅ ส่งชื่อจริงไปที่เมนู
+                await ProfileMenu.show(context, position, fullName: widget.fullName); // ✅ ส่งชื่อจริงไปที่เมนู
               },
             );
           },

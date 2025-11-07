@@ -94,7 +94,7 @@ class _AddAssetDialogState extends State<AddAssetDialog> {
                 // 🔹 Status dropdown
                 const Text("Status"),
                 DropdownButtonFormField<AssetStatus>(
-                  value: selectedStatus,
+                  initialValue: selectedStatus,
                   items: AssetStatus.values.map((status) {
                     return DropdownMenuItem(
                       value: status,
