@@ -139,7 +139,7 @@ class _EditAssetDialogState extends State<EditAssetDialog> {
                 items: AssetStatus.values.map((status) {
                   return DropdownMenuItem(
                     value: status,
-                    child: Text(status.label),s
+                    child: Text(status.label),
                   );
                 }).toList(),
                 onChanged: (value) {

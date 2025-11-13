@@ -22,43 +22,53 @@ class _StudentHistoryState extends State<StudentHistory> {
   }
 
   Future<void> _fetchHistory() async {
+  setState(() {
+    isLoading = true;
+    errorMessage = null;
+  });
+
+  try {
+    print('📜 [HISTORY] Fetching from API...');
+    final data = await HistoryService.fetchHistory();
+
     setState(() {
-      isLoading = true;
-      errorMessage = null;
+  historyData = data.map((item) {
+    final status = (item['status'] ?? 'unknown').toString().toLowerCase();
+    final color = _statusColor(status);
+
+    // ✅ บังคับให้ทุกฟิลด์เป็น String ปลอดภัยจาก null
+    String safe(Object? v) => (v ?? '').toString();
+
+    return {
+      'name': safe(item['asset_name']),
+      'borrowDate': safe(item['borrow_date']),
+      'returnDate': safe(item['return_date']),
+      'approvedBy': safe(item['approved_by']),
+      'gotBackBy': safe(item['got_back_by']),
+      'decision_note': safe(item['decision_note']),
+      'status': status.isNotEmpty
+          ? status[0].toUpperCase() + status.substring(1)
+          : 'Unknown',
+      'color': color['bg'],
+      'textColor': color['text'],
+    };
+  }).toList();
+
+  print('✅ [MAPPED HISTORY] ${historyData.length} item(s)');
+  isLoading = false;
+});
+
+
+
+  } catch (e) {
+    print('❌ [HISTORY] Error: $e');
+    setState(() {
+      errorMessage = e.toString();
+      isLoading = false;
     });
-
-    try {
-      print('📜 [HISTORY] Fetching from API...');
-      final data = await HistoryService.fetchHistory();
-
-      setState(() {
-        historyData = data.map((item) {
-          final status = (item['status'] ?? '').toString().toLowerCase();
-          final color = _statusColor(status);
-          return {
-            'name': item['asset_name'] ?? 'Unknown',
-            'borrowDate': item['borrow_date'] ?? '-',
-            'returnDate': item['return_date'] ?? '-',
-            'approvedBy': item['approved_by'] ?? '',
-            'gotBackBy': item['got_back_by'] ?? '',
-            'decision_note': item['decision_note'] ?? '',
-            'status': status.isNotEmpty
-                ? status[0].toUpperCase() + status.substring(1)
-                : 'Unknown',
-            'color': color['bg'],
-            'textColor': color['text'],
-          };
-        }).toList();
-        isLoading = false;
-      });
-    } catch (e) {
-      print('❌ [HISTORY] Error: $e');
-      setState(() {
-        errorMessage = e.toString();
-        isLoading = false;
-      });
-    }
   }
+}
+
 
   Map<String, Color> _statusColor(String status) {
     switch (status) {

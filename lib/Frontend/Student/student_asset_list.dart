@@ -7,6 +7,7 @@ import '../../widgets/profile_menu.dart';
 import '../../widgets/borrow_asset_dialog.dart';
 import '../../services/api_service.dart';
 import '../../widgets/pending_detail_dialog.dart';
+import '../../widgets/borrowed_detail_dialog.dart';
 
 class StudentAssetList extends StatefulWidget {
   final String fullName;
@@ -59,8 +60,8 @@ Future<void> _fetchAssets() async {
       setState(() {
         assets = data.map((item) {
           final imagePath = item['image_url'] != null
-              ? 'http://172.27.13.154:5000${item['image_url']}'
-              : 'http://172.27.13.154:5000/uploads/no_image.png';
+              ? 'http://192.168.10.212:5000${item['image_url']}'
+              : 'http://192.168.10.212:5000/uploads/no_image.png';
 
           return {
             'id': item['id'],
@@ -237,7 +238,8 @@ List<Map<String, dynamic>> get filteredAssets {
                                 splashColor: Colors.transparent,
                                 highlightColor: Colors.transparent,
                                 onTap: () {
-                       if (asset['status'] == AssetStatus.available) {
+                     if (asset['status'] == AssetStatus.available) {
+  // ✅ สถานะ available → เปิดหน้าขอยืม
   showDialog(
     context: context,
     builder: (context) => BorrowAssetDialog(
@@ -257,21 +259,34 @@ List<Map<String, dynamic>> get filteredAssets {
     // 🔄 รีแบบเร็วมาก — ไม่มีวงหมุน ไม่มี delay
     Future.microtask(() => _fetchAssets());
   });
-} 
-// ✅ ทั้ง pending และ borrowed → ไป PendingDetailDialog
-else if (asset['status'] == AssetStatus.pending || asset['status'] == AssetStatus.borrowed) {
+}
+
+else if (asset['status'] == AssetStatus.pending) {
+  // ⏳ Pending → ดูรายละเอียดสถานะคำขอยืม
   showDialog(
     context: context,
     builder: (context) => PendingDetailDialog(
       asset: asset,
     ),
   ).then((_) {
-    // 🔄 รีแบบเร็วมาก
     Future.microtask(() => _fetchAssets());
   });
-} 
-// ❌ เฉพาะกรณีอื่นเท่านั้นที่ไม่สามารถยืมได้
+}
+
+else if (asset['status'] == AssetStatus.borrowed) {
+  // 📦 Borrowed → เปิดหน้าดูรายละเอียดการยืม
+  showDialog(
+    context: context,
+    builder: (context) => BorrowedDetailDialog(
+      asset: asset,
+    ),
+  ).then((_) {
+    Future.microtask(() => _fetchAssets());
+  });
+}
+
 else {
+  // ❌ สถานะอื่น → ยืมไม่ได้
   ScaffoldMessenger.of(context).showSnackBar(
     SnackBar(
       content: Text('${asset['name']} is not available for borrowing.'),
@@ -279,6 +294,7 @@ else {
     ),
   );
 }
+
 
 
                                 },

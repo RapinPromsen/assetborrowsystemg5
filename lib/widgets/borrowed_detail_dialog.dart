@@ -1,22 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../../services/borrow_service.dart';
 
-class BorrowAssetDialog extends StatefulWidget {
+class BorrowedDetailDialog extends StatefulWidget {
   final Map<String, dynamic> asset;
-  final Function(Map<String, dynamic>) onConfirm;
 
-  const BorrowAssetDialog({
+  const BorrowedDetailDialog({
     super.key,
     required this.asset,
-    required this.onConfirm,
   });
 
   @override
-  State<BorrowAssetDialog> createState() => _BorrowAssetDialogState();
+  State<BorrowedDetailDialog> createState() => _BorrowedDetailDialogState();
 }
 
-class _BorrowAssetDialogState extends State<BorrowAssetDialog> {
+class _BorrowedDetailDialogState extends State<BorrowedDetailDialog> {
   late String borrowDate;
   late String returnDate;
 
@@ -49,7 +46,7 @@ class _BorrowAssetDialogState extends State<BorrowAssetDialog> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text(
-                      'Borrow Asset',
+                      'Borrowed Asset',
                       style: TextStyle(
                         fontSize: 22,
                         fontWeight: FontWeight.bold,
@@ -148,76 +145,7 @@ class _BorrowAssetDialogState extends State<BorrowAssetDialog> {
                 _buildInfoRow('Return date:', returnDate),
                 const SizedBox(height: 24),
 
-                // 🔘 Buttons
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      style: TextButton.styleFrom(
-                        foregroundColor: Colors.grey[700],
-                      ),
-                      child: const Text('Cancel'),
-                    ),
-                    const SizedBox(width: 12),
-                    ElevatedButton(
-                    onPressed: () async {
-  try {
-    final result = await BorrowService.createBorrowRequest(
-      widget.asset['id'],
-    );
-
-    // ✅ Logic ใหม่: ใช้ข้อมูลจาก backend เพื่อแสดงรายละเอียดการเปลี่ยนสถานะ
-    final changeNote = result['change_note'] ?? 'Request created';
-    final newStatus = result['new_status'] ?? 'pending';
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          '📦 "${widget.asset['name']}" → $newStatus\n📝 $changeNote',
-        ),
-        backgroundColor: Colors.green,
-        duration: const Duration(seconds: 3),
-      ),
-    );
-
-    // ✅ ส่งข้อมูลกลับไปอัปเดตในหน้าหลัก
-    widget.onConfirm({
-      ...result,
-      'status': newStatus,
-      'description': '${widget.asset['description'] ?? ''}\n📝 $changeNote',
-    });
-
-    Navigator.pop(context);
-  } catch (e) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Error: $e'),
-        backgroundColor: Colors.red,
-      ),
-    );
-  }
-},
-
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF2563EB),
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 20,
-                          vertical: 12,
-                        ),
-                        elevation: 0,
-                      ),
-                      child: const Text(
-                        'Send Request',
-                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-                      ),
-                    ),
-                  ],
-                ),
+             
               ],
             ),
           ),

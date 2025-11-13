@@ -24,11 +24,7 @@ router.get("/assets", verifyToken, (req, res) => {
   let params = [];
 
   if (userRole === "STUDENT") {
-    // 🧩 นักเรียนเห็นเฉพาะ:
-    // - สินทรัพย์ available
-    // - สินทรัพย์ที่ตัวเองยืม (pending / approved)
-    // ❌ ไม่เห็น pending ของคนอื่น
-    // ❌ ไม่เห็น disabled
+    // 🧩 นักเรียนเห็นเฉพาะสินทรัพย์ที่ตัวเองยืมหรือว่าง
     sql = `
       SELECT 
         a.id, a.name, a.image_url, a.description,
@@ -44,12 +40,27 @@ router.get("/assets", verifyToken, (req, res) => {
       WHERE a.status != 'disabled'
     `;
     params = [userId, userId];
-  } else {
-    // 👨‍🏫 Lecturer และ 🧑‍🔧 Staff เห็นทุกอย่าง
+
+  } else if (userRole === "LECTURER" || userRole === "STAFF") {
+    // 👨‍🏫 Lecturer และ 🧑‍🔧 Staff เห็นทุกสินทรัพย์ + request_id
     sql = `
       SELECT 
-        a.id, a.name, a.image_url, a.description, a.status
+        a.id AS asset_id,
+        a.name AS asset_name,
+        a.image_url,
+        a.description,
+        a.status AS asset_status,
+        br.id AS request_id,
+        br.requester_id,
+        u.full_name AS student_name,
+        br.status AS request_status
       FROM assets a
+      LEFT JOIN borrow_requests br 
+        ON a.id = br.asset_id 
+        AND br.status IN ('pending', 'approved', 'borrowed')
+      LEFT JOIN users u 
+        ON br.requester_id = u.id
+      ORDER BY a.id ASC
     `;
   }
 
@@ -59,12 +70,10 @@ router.get("/assets", verifyToken, (req, res) => {
       return res.status(500).json({ message: "Database error" });
     }
 
-    console.log(
-      `📦 [ASSETS] Role=${userRole} | UserID=${userId} | ${results.length} records fetched`
-    );
-    results.forEach((r) =>
-      console.log(`   🔹 Asset #${r.id} (${r.name}) → ${r.status}`)
-    );
+    console.log(`📦 [ASSETS] Role=${userRole} | UserID=${userId} | ${results.length} records fetched`);
+    results.forEach((r) => {
+      console.log(`   🔹 Asset #${r.asset_id || r.id} (${r.asset_name || r.name}) → ${r.asset_status || r.status}`);
+    });
 
     res.json(results);
   });

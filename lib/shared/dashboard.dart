@@ -1,14 +1,18 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
-import '../../widgets/profile_menu.dart'; // ✅ อย่าลืม import ถ้ามีไฟล์นี้
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../services/api_service.dart';
+import '../../widgets/profile_menu.dart';
 
 class Dashboard extends StatefulWidget {
   final String role;
-  final String fullName; // ✅ เพิ่มบรรทัดนี้
+  final String fullName;
 
   const Dashboard({
     super.key,
     required this.role,
-    required this.fullName, // ✅ เพิ่มใน constructor ด้วย
+    required this.fullName,
   });
 
   @override
@@ -21,8 +25,7 @@ class _DashboardState extends State<Dashboard> {
   int pending = 0;
   int borrowed = 0;
   int disabled = 0;
-
-  int currentIndex = 1;
+  bool isLoading = true;
 
   @override
   void initState() {
@@ -30,15 +33,59 @@ class _DashboardState extends State<Dashboard> {
     _loadCounts();
   }
 
-  Future<void> _loadCounts() async {
-    setState(() {
-      available = 10;
-      pending = 3;
-      borrowed = 2;
-      disabled = 5;
-    });
-  }
+ Future<void> _loadCounts() async {
+  try {
+    print("🔄 [DASHBOARD] Loading summary data..."); // เพิ่มตรงนี้
 
+    setState(() => isLoading = true);
+
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('token');
+    if (token == null) {
+      print("⚠️ [DASHBOARD] Missing token in SharedPreferences"); // เพิ่ม log เตือน
+      throw Exception("Token not found");
+    }
+
+    // ✅ เรียก API จริง
+    final url = Uri.parse("${ApiService.baseUrl}/dashboard/summary");
+    print("📡 [DASHBOARD REQUEST] Sending GET → $url");
+
+    final response = await http.get(
+      url,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    print("📥 [DASHBOARD RESPONSE] Code=${response.statusCode}"); // เพิ่ม log
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      print("✅ [DASHBOARD DATA] $data"); // มีอยู่แล้ว
+
+      setState(() {
+        available = data['available'] ?? 0;
+        pending = data['pending'] ?? 0;
+        borrowed = data['borrowed'] ?? 0;
+        disabled = data['disabled'] ?? 0;
+        isLoading = false;
+      });
+
+      // ✅ เพิ่ม log สรุปค่า
+      print("📊 [SUMMARY RESULT] Available=$available | Borrowed=$borrowed | Pending=$pending | Disabled=$disabled");
+    } else {
+      print("❌ [DASHBOARD ERROR BODY] ${response.body}");
+      throw Exception("Failed to load dashboard data");
+    }
+  } catch (e) {
+    print("💥 [DASHBOARD EXCEPTION] $e"); // เพิ่ม log ขณะเกิด error
+    setState(() => isLoading = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("Error loading dashboard: $e")),
+    );
+  }
+}
 
 
   @override
@@ -48,7 +95,7 @@ class _DashboardState extends State<Dashboard> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
-        centerTitle: true, // ✅ ทำให้ title อยู่ตรงกลาง
+        centerTitle: true,
         leading: Builder(
           builder: (context) {
             return IconButton(
@@ -61,8 +108,8 @@ class _DashboardState extends State<Dashboard> {
                     Overlay.of(context).context.findRenderObject() as RenderBox;
                 final Offset position =
                     button.localToGlobal(Offset.zero, ancestor: overlay);
-
-                await ProfileMenu.show(context, position, fullName: widget.fullName); // ✅ ส่งชื่อจริงไปที่เมนู
+                await ProfileMenu.show(context, position,
+                    fullName: widget.fullName);
               },
             );
           },
@@ -75,47 +122,43 @@ class _DashboardState extends State<Dashboard> {
             fontWeight: FontWeight.bold,
           ),
         ),
-       actions: [
-  IconButton(
-    icon: const Icon(Icons.refresh, color: Colors.black, size: 26),
-    tooltip: 'Reload Dashboard',
-    onPressed: () async {
-      await _loadCounts();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Dashboard data refreshed!'),
-          duration: Duration(seconds: 1),
-        ),
-      );
-    },
-  ),
-],
-
       ),
-      body: RefreshIndicator(
-        onRefresh: _loadCounts,
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            _statCard('Borrowed', borrowed, Colors.blue, Icons.handshake),
-            const SizedBox(height: 12),
-            _statCard('Available', available, Colors.green,
-                Icons.check_circle_outline),
-            const SizedBox(height: 12),
-            _statCard('Pending', pending, Colors.orange, Icons.hourglass_bottom),
-            const SizedBox(height: 12),
-            _statCard('Disabled', disabled, Colors.red, Icons.block),
-          ],
-        ),
-      ),
+      body: isLoading
+          ? const Center(child: CircularProgressIndicator(color: Colors.blueAccent))
+          : RefreshIndicator(
+              onRefresh: _loadCounts,
+              child: ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  _statCard('Available', available, Colors.green,
+                      Icons.check_circle_outline),
+                  const SizedBox(height: 12),
+                  _statCard('Borrowed', borrowed, Colors.blue, Icons.handshake),
+                  const SizedBox(height: 12),
+                  _statCard('Pending', pending, Colors.orange,
+                      Icons.hourglass_bottom),
+                  const SizedBox(height: 12),
+                  _statCard('Disabled', disabled, Colors.red, Icons.block),
+                ],
+              ),
+            ),
     );
   }
 
   Widget _statCard(String title, int count, Color color, IconData icon) {
     return Container(
       height: 100,
-      decoration:
-          BoxDecoration(color: color, borderRadius: BorderRadius.circular(16)),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: color.withOpacity(0.3),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,

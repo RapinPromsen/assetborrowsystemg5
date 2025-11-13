@@ -14,15 +14,21 @@ router.post("/borrow", verifyToken, authorizeRole("STUDENT"), (req, res) => {
   console.log(`📦 [BORROW REQUEST] Student #${student_id} requests asset #${asset_id}`);
 
   // 🧩 Step 1: ตรวจว่านักเรียนมีคำขอยืมที่ยังไม่จบหรือไม่
-  const checkExistingSql = `
-  SELECT COUNT(*) AS count 
-  FROM borrow_requests 
+ const checkExistingSql = `
+  SELECT COUNT(*) AS count
+  FROM borrow_requests
   WHERE requester_id = ?
     AND (
       status IN ('pending', 'approved', 'borrowed')
-      OR (status = 'returned' AND DATE(return_date) = CURDATE())
+      OR (
+        status = 'returned'
+        AND DATE(return_date) = DATE(borrow_date)
+        AND DATE(return_date) = CURDATE()
+      )
     )
 `;
+
+
   db.query(checkExistingSql, [student_id], (err, existingResult) => {
     if (err) {
       console.error("❌ [DB] Check existing borrow failed:", err);
@@ -89,6 +95,39 @@ router.post("/borrow", verifyToken, authorizeRole("STUDENT"), (req, res) => {
 });
 
 
+// ======================================================
+// 👨‍🏫 LECTURER: ดูคำขอยืมสินทรัพย์ที่รออนุมัติ (Pending Requests)
+// ======================================================
+router.get("/borrow/pending", verifyToken, authorizeRole("LECTURER"), (req, res) => {
+  const sql = `
+    SELECT 
+      br.id AS request_id,
+      br.requester_id,
+      br.asset_id,
+      a.name AS asset_name,
+      a.description,
+      a.image_url,
+      br.status,
+      br.borrow_date,
+      br.return_date,
+      u.full_name AS student_name
+    FROM borrow_requests br
+    JOIN assets a ON br.asset_id = a.id
+    JOIN users u ON br.requester_id = u.id
+    WHERE br.status = 'pending'
+    ORDER BY br.borrow_date DESC
+  `;
+
+  db.query(sql, (err, result) => {
+    if (err) {
+      console.error("❌ [DB] Error fetching pending requests:", err);
+      return res.status(500).json({ message: "Database error" });
+    }
+
+    console.log(`📋 [LECTURER FETCH] ${result.length} pending requests`);
+    res.json(result);
+  });
+});
 
 
 
@@ -152,6 +191,10 @@ router.put("/borrow/reject/:id", verifyToken, authorizeRole("LECTURER"), (req, r
   const lecturer_id = req.user.id;
   const { note } = req.body;
 
+  if (!note || note.trim() === "") {
+    return res.status(400).json({ message: "Rejection note is required." });
+  }
+
   console.log(`🔴 [REJECT] Lecturer #${lecturer_id} rejecting request #${id}`);
 
   const getSql = `SELECT asset_id, status FROM borrow_requests WHERE id = ? AND status = 'pending'`;
@@ -161,19 +204,17 @@ router.put("/borrow/reject/:id", verifyToken, authorizeRole("LECTURER"), (req, r
       return res.status(500).json({ message: "Database error" });
     }
     if (rows.length === 0) {
-      console.warn(`⚠️ [REJECT FAILED] Request #${id} not found or already processed.`);
       return res.status(400).json({ message: "Request not found or already processed" });
     }
 
     const assetId = rows[0].asset_id;
-    console.log(`📦 [FOUND] Request #${id} → asset #${assetId}`);
 
     const updateBorrow = `
       UPDATE borrow_requests
       SET status = 'rejected', decided_by = ?, decided_at = NOW(), decision_note = ?
       WHERE id = ?
     `;
-    db.query(updateBorrow, [lecturer_id, note || null, id], (err2) => {
+    db.query(updateBorrow, [lecturer_id, note.trim(), id], (err2) => {
       if (err2) {
         console.error("❌ [DB] Error rejecting request:", err2);
         return res.status(500).json({ message: "Database error when rejecting" });
@@ -182,16 +223,12 @@ router.put("/borrow/reject/:id", verifyToken, authorizeRole("LECTURER"), (req, r
       const updateAsset = `UPDATE assets SET status = 'available' WHERE id = ?`;
       db.query(updateAsset, [assetId], (err3) => {
         if (err3) {
-          console.error("❌ [DB] Error updating asset to available:", err3);
+          console.error("❌ [DB] Error updating asset:", err3);
           return res.status(500).json({ message: "Failed to update asset status" });
         }
 
-        console.log(
-  `🚫 [REJECTED] Request #${id} rejected by lecturer #${lecturer_id}` +
-  (note ? ` | 📝 Reason: ${note}` : " | (no note provided)")
-);
-res.json({ message: "Borrow request rejected", note });
-
+        console.log(`🚫 [REJECTED] Request #${id} rejected with note: "${note.trim()}"`);
+        res.json({ message: "Borrow request rejected", note });
       });
     });
   });
@@ -206,14 +243,13 @@ router.put("/return/:id", verifyToken, authorizeRole("STAFF"), (req, res) => {
 
   console.log(`📦 [RETURN] Staff #${staff_id} attempting to return request #${id}`);
 
-  // ตรวจสอบว่ามีคำขอที่ยัง "approved" อยู่หรือไม่
   const checkSql = `
     SELECT br.asset_id, br.status, a.name AS asset_name
     FROM borrow_requests br
     JOIN assets a ON br.asset_id = a.id
     WHERE br.id = ? AND br.status IN ('approved', 'borrowed')
   `;
-  
+
   db.query(checkSql, [id], (err, result) => {
     if (err) {
       console.error("❌ [DB] Error checking request:", err);
@@ -225,13 +261,10 @@ router.put("/return/:id", verifyToken, authorizeRole("STAFF"), (req, res) => {
       return res.status(400).json({ message: "Invalid or already returned" });
     }
 
-    const assetId = result[0].asset_id;
-    const assetName = result[0].asset_name;
-    const oldStatus = result[0].status;
-
+    const { asset_id: assetId, asset_name: assetName, status: oldStatus } = result[0];
     console.log(`🔎 [FOUND] Asset '${assetName}' (ID: ${assetId}) currently borrowed.`);
 
-    // 1️⃣ อัปเดต borrow_requests ให้เป็น returned
+    // 1️⃣ อัปเดต borrow_requests → returned
     const updateBorrowSql = `
       UPDATE borrow_requests
       SET status = 'returned',
@@ -248,11 +281,7 @@ router.put("/return/:id", verifyToken, authorizeRole("STAFF"), (req, res) => {
       }
 
       // 2️⃣ เปลี่ยนสินทรัพย์กลับเป็น available
-      const updateAssetSql = `
-        UPDATE assets
-        SET status = 'available'
-        WHERE id = ?
-      `;
+      const updateAssetSql = `UPDATE assets SET status = 'available' WHERE id = ?`;
 
       db.query(updateAssetSql, [assetId], (err3) => {
         if (err3) {
@@ -261,34 +290,20 @@ router.put("/return/:id", verifyToken, authorizeRole("STAFF"), (req, res) => {
         }
 
         console.log(`♻️ [ASSET UPDATED] Asset #${assetId} (${assetName}) is now available again.`);
+        console.log(`✅ [SUCCESS] Request #${id} successfully returned and asset reset to available.`);
 
-        // 3️⃣ เพิ่ม log ลงใน request_history
-        const logSql = `
-          INSERT INTO request_history (request_id, old_status, new_status, changed_by_id, note)
-          VALUES (?, ?, 'returned', ?, 'Returned by staff')
-        `;
-
-        db.query(logSql, [id, oldStatus, staff_id], (err4) => {
-          if (err4) {
-            console.error("⚠️ [LOG FAILED] Unable to record return log:", err4);
-            return res.status(500).json({ message: "Return success but failed to log history" });
-          }
-
-          console.log(`📝 [LOGGED] Request #${id} | old_status=${oldStatus} → new_status=returned | by Staff #${staff_id}`);
-          console.log(`✅ [SUCCESS] Request #${id} successfully returned and asset #${assetId} reset to available.`);
-          
-          res.json({
-            message: "Item returned successfully by staff",
-            request_id: id,
-            asset_id: assetId,
-            asset_name: assetName,
-            returned_by: staff_id,
-          });
+        res.json({
+          message: "Item returned successfully by staff",
+          request_id: id,
+          asset_id: assetId,
+          asset_name: assetName,
+          returned_by: staff_id,
         });
       });
     });
   });
 });
+
 
 
 export default router;

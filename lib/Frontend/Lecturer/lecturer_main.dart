@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'lecturer_asset_list.dart';
 import '../../shared/dashboard.dart'; // ✅ ใช้ Dashboard ตัวเดียวกับ Staff
 import 'lecturer_history.dart';
-import 'lecturer_request_asset.dart'; // ✅ เพิ่มถ้ามีหน้า Return
 
 class LecturerMain extends StatefulWidget {
   final String fullName; // ✅ รับชื่อจริงจาก Login
@@ -28,7 +27,6 @@ class _LecturerMainState extends State<LecturerMain> {
       LecturerAssetList(fullName: widget.fullName),
       Dashboard(fullName: widget.fullName, role: widget.role),
       LecturerHistory(fullName: widget.fullName),
-      LecturerRequestAsset(fullName: widget.fullName), 
     ];
 
     return Scaffold(
@@ -55,10 +53,7 @@ class _LecturerMainState extends State<LecturerMain> {
             icon: Icon(Icons.history),
             label: 'History',
           ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.front_hand),
-            label: 'Request',
-          ),
+
         ],
       ),
     );

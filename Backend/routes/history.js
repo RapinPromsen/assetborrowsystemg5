@@ -5,11 +5,13 @@ import { verifyToken, authorizeRole } from "./verifyToken.js";
 const router = express.Router();
 
 // ======================================================
-// 📜 HISTORY: ดูประวัติการยืม/คืน
+// 📜 HISTORY: ดูประวัติการยืม/คืนตามสิทธิ์
+// ======================================================
 // ======================================================
 // 📜 HISTORY: ดูประวัติการยืม/คืนตามสิทธิ์
+// ======================================================
 router.get(
-  "/history",
+  "/borrow/history",
   verifyToken,
   authorizeRole("STUDENT", "LECTURER", "STAFF"),
   (req, res) => {
@@ -18,45 +20,45 @@ router.get(
 
     console.log(`📜 [HISTORY] Role=${roleUpper}, UserID=${user_id}`);
 
-    // 🧩 Base SQL
     let sql = `
       SELECT 
-        br.id AS request_id,
+        br.id,
         a.name AS asset_name,
-        -- ✅ แปลง status ตาม role ที่เห็น
-        CASE 
-          WHEN br.status = 'approved' AND '${roleUpper}' IN ('STUDENT', 'STAFF')
-            THEN 'borrowed'
-          ELSE br.status
-        END AS status,
+        ${
+          roleUpper === "STUDENT"
+            ? `CASE WHEN br.status = 'approved' THEN 'borrowed' ELSE br.status END`
+            : `br.status`
+        } AS status,
         DATE_FORMAT(br.borrow_date, '%Y-%m-%d') AS borrow_date,
         DATE_FORMAT(br.return_date, '%Y-%m-%d') AS return_date,
-        u.full_name AS requester_name,
-        l.full_name AS approved_by,
-        s.full_name AS got_back_by,
-        br.decision_note AS decision_note
+        COALESCE(br.decision_note, '') AS decision_note,
+        lec.full_name AS decided_by,
+        stf.full_name AS got_back_by,
+        req.full_name AS student_name
       FROM borrow_requests br
       JOIN assets a ON br.asset_id = a.id
-      LEFT JOIN users u ON br.requester_id = u.id
-      LEFT JOIN users l ON br.decided_by = l.id
-      LEFT JOIN request_history rh 
-          ON rh.request_id = br.id AND rh.new_status = 'returned'
-      LEFT JOIN users s ON rh.changed_by_id = s.id
+      LEFT JOIN users lec ON br.decided_by = lec.id
+      LEFT JOIN users stf ON br.got_back_by = stf.id
+      LEFT JOIN users req ON br.requester_id = req.id
     `;
 
-    let params = [];
+    const params = [];
 
+    // ✅ เงื่อนไขตาม role
     if (roleUpper === "STUDENT") {
-      sql += `WHERE br.requester_id = ?`;
-      params = [user_id];
-    } else if (roleUpper === "LECTURER") {
-      sql += `WHERE br.decided_by = ?`;
-      params = [user_id];
-    } else if (roleUpper === "STAFF") {
-      sql += `WHERE 1=1`;
+      sql += ` WHERE br.requester_id = ?`;
+      params.push(user_id);
+    } 
+    else if (roleUpper === "LECTURER") {
+  sql += ` WHERE br.decided_by = ? AND br.status IN ('approved', 'borrowed', 'returned', 'rejected')`;
+  params.push(user_id);
+}
+
+    else if (roleUpper === "STAFF") {
+      sql += ` WHERE br.status IN ('approved', 'borrowed', 'returned')`;
     }
 
-    sql += ` ORDER BY br.borrow_date DESC`;
+    sql += ` ORDER BY br.id DESC LIMIT 100`;
 
     db.query(sql, params, (err, results) => {
       if (err) {
@@ -64,7 +66,7 @@ router.get(
         return res.status(500).json({ message: "Database error" });
       }
 
-      console.log(`📜 [HISTORY] Role=${roleUpper} | Found ${results.length} records`);
+      console.log(`✅ [HISTORY] ${results.length} record(s) found for ${roleUpper}`);
       res.json(results);
     });
   }

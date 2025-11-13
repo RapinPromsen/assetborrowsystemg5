@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../widgets/profile_menu.dart';
+import '../../services/history_service.dart';
 
 class LecturerHistory extends StatefulWidget {
   final String fullName;
@@ -10,56 +11,84 @@ class LecturerHistory extends StatefulWidget {
 }
 
 class _LecturerHistoryState extends State<LecturerHistory> {
-  final List<Map<String, dynamic>> historyData = [
-    {
-      'name': 'Camera',
-      'borrowDate': '18/10/25',
-      'returnDate': '19/10/25',
-      'approvedBy': 'Robert Downey',
-      'gotBackBy': 'Mr.Admin',
-      'borrowBy': 'Somchai',
-      'status': 'Approved',
-      'color': Colors.green,
-      'textColor': Colors.white,
-    },
-    {
-      'name': 'Camera',
-      'borrowDate': '19/10/25',
-      'returnDate': '20/10/25',
-      'approvedBy': 'Robert Downey',
-      'borrowBy': 'Somchai',
-      'status': 'Borrowed',
-      'color': Colors.blue,
-      'textColor': Colors.white,
-    },
-    {
-      'name': 'Camera',
-      'borrowDate': '19/10/25',
-      'returnDate': '29/10/25',
-      'borrowBy': 'Somchai',
-      'status': 'Pending',
-      'color': Colors.amber.shade300,
-      'textColor': Colors.white,
-    },
-    {
-      'name': 'Camera',
-      'borrowDate': '-',
-      'returnDate': '-',
-      'rejectedBy': 'Robert Downey',
-      'borrowBy': 'Somchai',
-      'status': 'Rejected',
-      'color': Colors.red.shade300,
-      'textColor': Colors.white,
-    },
-  ];
+  List<Map<String, dynamic>> historyData = [];
+  bool isLoading = true;
+  String? errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchHistory();
+  }
+
+  Future<void> _fetchHistory() async {
+    setState(() {
+      isLoading = true;
+      errorMessage = null;
+    });
+
+    try {
+      print('📜 [LECTURER HISTORY] Fetching from API...');
+      final data = await HistoryService.fetchLecturerHistory();
+
+      setState(() {
+        historyData = data.map((item) {
+          final status = (item['status'] ?? 'unknown').toString().toLowerCase();
+          final color = _statusColor(status);
+          String safe(Object? v) => (v ?? '').toString();
+
+          return {
+            'name': safe(item['asset_name']),
+            'borrowBy': safe(item['student_name']),
+            'borrowDate': safe(item['borrow_date']),
+            'returnDate': safe(item['return_date']),
+            'approvedBy': safe(item['approved_by']),
+            'gotBackBy': safe(item['got_back_by']),
+            'decision_note': safe(item['decision_note']),
+            'status': status.isNotEmpty
+                ? status[0].toUpperCase() + status.substring(1)
+                : 'Unknown',
+            'color': color['bg'],
+            'textColor': color['text'],
+          };
+        }).toList();
+
+        print('✅ [LECTURER HISTORY] ${historyData.length} item(s)');
+        isLoading = false;
+      });
+    } catch (e) {
+      print('❌ [LECTURER HISTORY] Error: $e');
+      setState(() {
+        errorMessage = e.toString();
+        isLoading = false;
+      });
+    }
+  }
+
+  Map<String, Color> _statusColor(String status) {
+    switch (status) {
+      case 'pending':
+        return {'bg': Colors.amber.shade400, 'text': Colors.black};
+      case 'approved':
+      case 'borrowed':
+        return {'bg': Colors.blueAccent, 'text': Colors.white};
+      case 'returned':
+        return {'bg': Colors.grey.shade600, 'text': Colors.white};
+      case 'rejected':
+        return {'bg': Colors.red.shade400, 'text': Colors.white};
+      default:
+        return {'bg': Colors.grey.shade300, 'text': Colors.black};
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F5),
+      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
         backgroundColor: Colors.white,
-        elevation: 0,
+        elevation: 2,
+        shadowColor: Colors.black12,
         centerTitle: true,
         leading: Builder(
           builder: (context) {
@@ -83,15 +112,22 @@ class _LecturerHistoryState extends State<LecturerHistory> {
           ),
         ),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(12.0),
-        child: ListView(
-          children: [
-            const SizedBox(height: 16),
-            ...historyData.map((item) => HistoryCard(item: item)),
-          ],
-        ),
-      ),
+      body: isLoading
+          ? const Center(child: CircularProgressIndicator(color: Colors.blueAccent))
+          : errorMessage != null
+              ? Center(
+                  child: Text('Error: $errorMessage', style: const TextStyle(color: Colors.red)),
+                )
+              : RefreshIndicator(
+                  onRefresh: _fetchHistory,
+                  color: Colors.blueAccent,
+                  child: ListView.builder(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: historyData.length,
+                    itemBuilder: (context, index) =>
+                        HistoryCard(item: historyData[index]),
+                  ),
+                ),
     );
   }
 }
@@ -102,48 +138,92 @@ class HistoryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      elevation: 0.5,
-      child: Padding(
-        padding: const EdgeInsets.all(12.0),
-        child: Stack(
+    final status = item['status'].toString().toLowerCase();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Stack(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 100, 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(item['name'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                const SizedBox(height: 8),
+                _buildInfoRow('Borrow by:', item['borrowBy']),
+                _buildInfoRow('Borrow date:', item['borrowDate']),
+                _buildInfoRow('Return date:', item['returnDate']),
+                const SizedBox(height: 6),
+                Divider(color: Colors.grey.shade200, height: 10),
+                const SizedBox(height: 6),
+                if (status == 'rejected')
+                  _buildInfoRow('Rejected by:', item['approvedBy']),
+                if (status == 'rejected')
+                  _buildInfoRow('Reason:', item['decision_note']),
+                if (status != 'rejected')
+                  _buildInfoRow('Approved by:', item['approvedBy']),
+                if ((item['gotBackBy'] ?? '').isNotEmpty)
+                  _buildInfoRow('Got back by:', item['gotBackBy']),
+                if (status != 'rejected' && (item['decision_note'] ?? '').isNotEmpty)
+                  _buildInfoRow('Note:', item['decision_note']),
+              ],
+            ),
+          ),
+          Positioned(
+            top: 12,
+            right: 12,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: item['color'],
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                item['status'],
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: item['textColor'],
+                  fontSize: 13,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(String label, String? value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 3),
+      child: RichText(
+        text: TextSpan(
+          style: const TextStyle(
+            color: Color(0xFF475569),
+            fontSize: 14,
+            height: 1.4,
+          ),
           children: [
-            Padding(
-              padding: const EdgeInsets.only(top: 4, right: 80),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Name: ${item['name']}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 4),
-                  Text('Borrow date: ${item['borrowDate']}'),
-                  Text('Returned date: ${item['returnDate']}'),
-                  if (item.containsKey('approvedBy')) Text('Approved by: ${item['approvedBy']}'),
-                  if (item.containsKey('gotBackBy')) Text('Got back by: ${item['gotBackBy']}'),
-                  if (item.containsKey('rejectedBy')) Text('Rejected by: ${item['rejectedBy']}'),
-                  Text('Borrow by: ${item['borrowBy']}'),
-                ],
+            TextSpan(
+              text: '$label ',
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF1E293B),
               ),
             ),
-            Positioned(
-              top: 0,
-              right: 0,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: item['color'],
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  item['status'],
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: item['textColor'],
-                  ),
-                ),
-              ),
-            ),
+            TextSpan(text: value ?? '-'),
           ],
         ),
       ),
