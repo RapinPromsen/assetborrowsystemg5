@@ -1,11 +1,15 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../services/asset_service.dart';
 import '../../models/asset.dart';
-import '../../widgets/profile_menu.dart'; // นำเข้า ProfileMenu widget
-import '../../widgets/edit_asset_dialog.dart'; // ✅ เพิ่มไฟล์ dialog แยก
+import '../../widgets/profile_menu.dart';
+import '../../widgets/edit_asset_dialog.dart';
 import '../../widgets/add_asset_dialog.dart';
-
-
-
+import '../../widgets/borrowed_detail_dialog.dart';
+import '../../widgets/pending_detail_dialog.dart';   
+import '../../services/api_service.dart';
 
 class StaffAssetList extends StatefulWidget {
   final String fullName;
@@ -16,36 +20,97 @@ class StaffAssetList extends StatefulWidget {
 }
 
 class _StaffAssetListState extends State<StaffAssetList> {
-  final List<Map<String, dynamic>> assets = [
-    {
-      'id': 1,
-      'name': 'Camera',
-      'status': AssetStatus.available,
-      'image': 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=400',
-      'description': 'High quality DSLR camera for events.',
-    },
-    {
-      'id': 2,
-      'name': 'Camera',
-      'status': AssetStatus.disable,
-      'image': 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=400',
-      'description': 'Broken lens — needs repair.',
-    },
-    {
-      'id': 3,
-      'name': 'Camera',
-      'status': AssetStatus.pending,
-      'image': 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=400',
-      'description': 'Waiting for admin approval.',
-    },
-    {
-      'id': 4,
-      'name': 'Camera',
-      'status': AssetStatus.borrowed,
-      'image': 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=400',
-      'description': 'Borrowed by student for project.',
-    },
-  ];
+  List<Map<String, dynamic>> assets = [];
+  bool isLoading = true;
+  final TextEditingController _searchController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchAssets();
+  }
+
+  Future<void> _fetchAssets() async {
+    setState(() => isLoading = true);
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('token');
+      if (token == null) throw Exception("Token not found");
+
+      final url = '${ApiService.baseUrl}/assets';
+      final response = await http.get(
+        Uri.parse(url),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final List data = jsonDecode(response.body);
+
+        setState(() {
+          assets = data.map((item) {
+            final imagePath = item['image_url'] != null
+                ? '${ApiService.baseImageUrl}${item['image_url']}'
+                : '${ApiService.baseImageUrl}/uploads/no_image.png';
+
+            return {
+              'id': item['asset_id'] ?? item['id'],
+              'name': item['asset_name'] ?? item['name'],
+              'status': _parseStatus(item['asset_status'] ?? item['status']),
+              'image': imagePath,
+              'description': item['description'] ?? '',
+            };
+          }).toList();
+
+          const order = {
+            'pending': 0,
+            'borrowed': 1,
+            'available': 2,
+            'disabled': 3,
+          };
+
+          assets.sort((a, b) {
+            final aKey = (a['status'] as AssetStatus).name;
+            final bKey = (b['status'] as AssetStatus).name;
+            return (order[aKey] ?? 99).compareTo(order[bKey] ?? 99);
+          });
+
+          isLoading = false;
+        });
+      } else {
+        setState(() => isLoading = false);
+      }
+    } catch (e) {
+      setState(() => isLoading = false);
+    }
+  }
+
+  AssetStatus _parseStatus(String? status) {
+    switch (status?.toLowerCase()) {
+      case 'available':
+        return AssetStatus.available;
+      case 'pending':
+        return AssetStatus.pending;
+      case 'borrowed':
+        return AssetStatus.borrowed;
+      case 'disabled':
+        return AssetStatus.disable;
+      default:
+        return AssetStatus.available;
+    }
+  }
+
+  List<Map<String, dynamic>> get filteredAssets {
+    final keyword = _searchController.text.toLowerCase().trim();
+    if (keyword.isEmpty) return assets;
+    return assets.where((a) {
+      final name = (a['name'] ?? '').toLowerCase();
+      return name.contains(keyword);
+    }).toList();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -63,9 +128,11 @@ class _StaffAssetListState extends State<StaffAssetList> {
                 final RenderBox button = context.findRenderObject() as RenderBox;
                 final RenderBox overlay =
                     Overlay.of(context).context.findRenderObject() as RenderBox;
-                final Offset position = button.localToGlobal(Offset.zero, ancestor: overlay);
+                final Offset position =
+                    button.localToGlobal(Offset.zero, ancestor: overlay);
 
-                await ProfileMenu.show(context, position, fullName: widget.fullName);
+                await ProfileMenu.show(context, position,
+                    fullName: widget.fullName);
               },
             );
           },
@@ -78,213 +145,239 @@ class _StaffAssetListState extends State<StaffAssetList> {
             fontWeight: FontWeight.bold,
           ),
         ),
-      actions: [
-  IconButton(
-    icon: const Icon(Icons.add, color: Colors.black, size: 28),
-    onPressed: () async {
-      // เปิด Dialog สำหรับเพิ่มครุภัณฑ์
-      await showDialog(
-        context: context,
-        builder: (context) => AddAssetDialog(
-          onAdd: (newAsset) {
-            setState(() {
-              assets.add(newAsset); // ✅ เพิ่ม asset ลงใน list
-            });
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.add, color: Colors.black, size: 28),
+            onPressed: () async {
+              await showDialog(
+                context: context,
+                builder: (context) {
+                  return AddAssetDialog(
+                    onAdd: (newAsset) {
+                      setState(() {
+                        assets.add(newAsset);
+                      });
 
-            // ✅ แจ้งเตือนผู้ใช้หลังเพิ่มสำเร็จ
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Added "${newAsset['name']}" successfully'),
-                backgroundColor: Colors.green,
-                behavior: SnackBarBehavior.floating,
-              ),
-            );
-          },
-        ),
-      );
-    },
-  ),
-],
-
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Added "${newAsset['name']}" successfully'),
+                          backgroundColor: Colors.green,
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                    },
+                  );
+                },
+              );
+            },
+          ),
+        ],
       ),
-      body: Column(
-        children: [
-          // 🔍 Search bar
-          Container(
-            color: Colors.white,
-            padding: const EdgeInsets.all(16),
-            child: Container(
-              decoration: BoxDecoration(
-                color: const Color(0xFFE5E5E5),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
+
+      body: isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : RefreshIndicator(
+              onRefresh: _fetchAssets,
+              child: Column(
                 children: [
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 16),
-                    child: Icon(Icons.search, color: Colors.black54),
-                  ),
-                  const Expanded(
-                    child: TextField(
-                      decoration: InputDecoration(
-                        border: InputBorder.none,
-                        hintText: 'Search assets...',
+                  Container(
+                    color: Colors.white,
+                    padding: const EdgeInsets.all(16),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE5E5E5),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          const Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 16),
+                            child: Icon(Icons.search, color: Colors.black54),
+                          ),
+                          Expanded(
+                            child: TextField(
+                              controller: _searchController,
+                              decoration: const InputDecoration(
+                                border: InputBorder.none,
+                                hintText: 'Search assets...',
+                              ),
+                              onChanged: (v) => setState(() {}),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: IconButton(
-                      icon: const Icon(Icons.filter_list, color: Colors.black54),
-                      onPressed: () {},
+
+                  Expanded(
+                    child: ListView.builder(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: filteredAssets.length,
+                      itemBuilder: (context, index) {
+                        final asset = filteredAssets[index];
+                        final status = asset['status'] as AssetStatus;
+
+                        return InkWell(
+                          borderRadius: BorderRadius.circular(16),
+                          onTap: () {
+  final status = asset['status'] as AssetStatus;
+
+  if (status == AssetStatus.pending) {
+    // ไป pending detail
+    showDialog(
+      context: context,
+      builder: (context) => PendingDetailDialog(asset: asset),
+    );
+  } 
+  else if (status == AssetStatus.borrowed) {
+    // ไป borrowed detail
+    showDialog(
+      context: context,
+      builder: (context) => BorrowedDetailDialog(asset: asset),
+    );
+  } 
+  else {
+    // available / disabled → แก้ไขได้
+    _openEditDialog(asset);
+  }
+},
+                          child: Container(
+                            margin: const EdgeInsets.only(bottom: 16),
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.05),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Image.network(
+                                    asset['image'],
+                                    width: 70,
+                                    height: 70,
+                                    fit: BoxFit.cover,
+                                  ),
+                                ),
+                                const SizedBox(width: 16),
+
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        asset['name'],
+                                        style: const TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        asset['description'] ?? 'No description',
+                                        style: const TextStyle(
+                                          fontSize: 14,
+                                          color: Colors.grey,
+                                        ),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 6),
+                                  decoration: BoxDecoration(
+                                    color: status.color,
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    status.label,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
                     ),
                   ),
                 ],
               ),
             ),
-          ),
+    );
+  }
 
-          // 📦 Asset list
-          Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: assets.length,
-              itemBuilder: (context, index) {
-                final asset = assets[index];
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 16),
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
-                        blurRadius: 10,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // 🖼️ รูปภาพ
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Image.network(
-                          asset['image'] ?? '',
-                          width: 60,
-                          height: 60,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) {
-                            return Container(
-                              width: 60,
-                              height: 60,
-                              color: Colors.grey[300],
-                              child: const Icon(Icons.camera_alt, color: Colors.grey),
-                            );
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: 16),
+  void _openEditDialog(Map<String, dynamic> asset) {
+  showDialog(
+    context: context,
+    builder: (context) {
+      return EditAssetDialog(
+        asset: asset,
+        onSave: (updatedAsset) async {
+          
+          // 1) เรียก backend อัปเดต
+          final success = await AssetService.updateAsset(updatedAsset);
 
-                      // 📄 รายละเอียดทางซ้าย
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              asset['name'] ?? 'Unknown',
-                              style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              asset['description'] ?? 'No description available.',
-                              style: const TextStyle(
-                                fontSize: 14,
-                                color: Colors.grey,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+          if (!success) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text("Update failed"),
+                backgroundColor: Colors.red,
+              ),
+            );
+            return;
+          }
 
-                      // 🧩 Status อยู่บน | Edit อยู่ล่าง (แนวตั้ง)
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          // ✅ Status ด้านบน
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: (asset['status'] as AssetStatus).color,
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              (asset['status'] as AssetStatus).label,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          // ✏️ ปุ่ม Edit ด้านล่าง
-                          SizedBox(
-                            width: 80,
-                            child: ElevatedButton(
-                              onPressed: () => showEditDialog(asset, index),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF8B5CF6),
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(vertical: 8),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                elevation: 0,
-                              ),
-                              child: const Text(
-                                'Edit',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                );
-              },
+          // 2) อัปเดต UI ให้ตรงข้อมูลใหม่
+          setState(() {
+            final index = assets.indexWhere((a) => a['id'] == updatedAsset['id']);
+
+            if (index != -1) {
+              assets[index] = {
+                ...assets[index],
+
+                // ส่งเข้า UI ใหม่
+                'name': updatedAsset['name'],
+                'description': updatedAsset['description'],
+                'status': updatedAsset['status'],
+
+                // ถ้ามีไฟล์ใหม่ → แสดงรูปใหม่
+                'image': updatedAsset['image_url'] != null
+    ? '${ApiService.baseImageUrl}${updatedAsset['image_url']}'
+    : assets[index]['image'],
+              };
+            }
+          });
+
+          // ปิด dialog
+          Navigator.pop(context);
+
+          // แจ้งเตือน
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text("Updated \"${updatedAsset['name']}\" successfully."),
+              backgroundColor: Colors.green,
             ),
-          ),
-        ],
-      ),
-    );
-  }
+          );
+        },
+      );
+    },
+  );
 }
-
-// ✅ เพิ่มท้ายไฟล์ staff_asset_list.dart (อย่าแก้ของเดิม)
-extension StaffAssetDialogExtension on _StaffAssetListState {
-  void showEditDialog(Map<String, dynamic> asset, int index) {
-    showDialog(
-      context: context,
-      builder: (context) {
-        return EditAssetDialog(
-          asset: asset,
-          onSave: (updatedAsset) {
-          },
-        );
-      },
-    );
-  }
 }

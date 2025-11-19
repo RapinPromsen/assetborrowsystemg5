@@ -1,10 +1,12 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import '../models/asset.dart';
 
 class EditAssetDialog extends StatefulWidget {
   final Map<String, dynamic> asset;
-  final void Function(Map<String, dynamic> updatedAsset) onSave;
-  final void Function(Map<String, dynamic> deletedAsset)? onDelete;
+  final void Function(Map<String, dynamic>) onSave;
+  final void Function(Map<String, dynamic>)? onDelete;
 
   const EditAssetDialog({
     super.key,
@@ -20,167 +22,220 @@ class EditAssetDialog extends StatefulWidget {
 class _EditAssetDialogState extends State<EditAssetDialog> {
   late TextEditingController nameController;
   late TextEditingController descController;
+
   late AssetStatus selectedStatus;
+
+  File? newImageFile;              // ⭐ ไฟล์รูปที่เลือกใหม่
+  String? previewImagePath;        // ⭐ Path สำหรับ preview
 
   @override
   void initState() {
     super.initState();
     nameController = TextEditingController(text: widget.asset['name']);
     descController = TextEditingController(text: widget.asset['description']);
-    selectedStatus = widget.asset['status'];
+
+    selectedStatus = widget.asset['status']; // enum
+
+    previewImagePath = null; // default ยังไม่เลือกภาพใหม่
+  }
+
+  // ⭐ ฟังก์ชันเลือกไฟล์จาก gallery
+  Future<void> pickImage() async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(source: ImageSource.gallery);
+
+    if (picked != null) {
+      setState(() {
+        newImageFile = File(picked.path);
+        previewImagePath = picked.path; // แสดงภาพที่เลือก
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
+    return Dialog(
+      backgroundColor: Colors.white,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      contentPadding: const EdgeInsets.all(20),
-      insetPadding: const EdgeInsets.symmetric(horizontal: 40, vertical: 24),
-      content: SizedBox(
-        width: 320,
-        height: 460,
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // 🔹 หัวข้อ + ปุ่ม Delete ด้านขวา
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Edit assets',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 18,
-                    ),
-                  ),
-                  IconButton(
-                    tooltip: "Delete this asset",
-                    icon: const Icon(Icons.delete_outline, color: Colors.red),
-                    onPressed: () async {
-                      final confirm = await showDialog<bool>(
-                        context: context,
-                        builder: (context) => AlertDialog(
-                          title: const Text("Confirm Delete"),
-                          content: const Text("Are you sure you want to delete this asset?"),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(context, false),
-                              child: const Text("Cancel"),
-                            ),
-                            ElevatedButton(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.red,
-                                foregroundColor: Colors.white,
-                              ),
-                              onPressed: () => Navigator.pop(context, true),
-                              child: const Text("Delete"),
-                            ),
-                          ],
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 420),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // เลื่อนเฉพาะเนื้อหา
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // 🔹 หัวข้อ + Delete
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          "Edit Asset",
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 20,
+                          ),
                         ),
-                      );
 
-                      if (confirm == true && widget.onDelete != null) {
-                        Navigator.of(context).pop();
-                        widget.onDelete!(widget.asset);
-                      }
-                    },
+                        // ปุ่ม delete
+                        if (widget.onDelete != null)
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline, color: Colors.red),
+                            onPressed: () async {
+                              final confirm = await showDialog<bool>(
+                                context: context,
+                                builder: (_) => AlertDialog(
+                                  title: const Text("Confirm Delete"),
+                                  content: const Text("Are you sure you want to delete this asset?"),
+                                  actions: [
+                                    TextButton(
+                                      child: const Text("Cancel"),
+                                      onPressed: () => Navigator.pop(context, false),
+                                    ),
+                                    ElevatedButton(
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.red,
+                                        foregroundColor: Colors.white,
+                                      ),
+                                      child: const Text("Delete"),
+                                      onPressed: () => Navigator.pop(context, true),
+                                    ),
+                                  ],
+                                ),
+                              );
+
+                              if (confirm == true && widget.onDelete != null) {
+                                Navigator.pop(context);
+                                widget.onDelete!(widget.asset);
+                              }
+                            },
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+
+                    // ⭐ รูป (กดเลือกได้)
+                    Center(
+                      child: InkWell(
+                        onTap: pickImage,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Container(
+                            width: 140,
+                            height: 140,
+                            color: Colors.grey[200],
+                            child: previewImagePath != null
+                                ? Image.file(
+                                    File(previewImagePath!),
+                                    fit: BoxFit.cover,
+                                  )
+                                : Image.network(
+                                    widget.asset['image'],
+                                    fit: BoxFit.cover,
+                                  ),
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    // 🔹 ชื่อ
+                    const Text("Asset name"),
+                    TextField(
+                      controller: nameController,
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                        hintText: "Enter asset name",
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // 🔹 Description
+                    const Text("Description"),
+                    TextField(
+                      controller: descController,
+                      maxLines: 2,
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                        hintText: "Enter description",
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // 🔹 Status dropdown
+                    const Text("Status"),
+                    DropdownButtonFormField<AssetStatus>(
+                      value: selectedStatus,
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                      ),
+                      items: AssetStatus.values.map((s) {
+                        return DropdownMenuItem(
+                          value: s,
+                          child: Text(s.label),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        if (value != null) {
+                          setState(() => selectedStatus = value);
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            // ⭐ ปุ่มไม่เลื่อน
+            Padding(
+              padding: const EdgeInsets.only(bottom: 20, left: 20, right: 20, top: 10),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    child: const Text("Cancel"),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                  const SizedBox(width: 12),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blueAccent,
+                      foregroundColor: Colors.white,
+                    ),
+                    child: const Text("Save"),
+                  onPressed: () {
+  print("=== SAVE PRESSED ===");
+  print("name: ${nameController.text}");
+  print("description: ${descController.text}");
+  print("status: $selectedStatus");
+  print("newImageFile: $newImageFile");
+
+ widget.onSave({
+  ...widget.asset,
+  "name": nameController.text,
+  "description": descController.text,
+  "status": selectedStatus,
+  "newImageFile": newImageFile,
+  "image_url": widget.asset['image_url'],  
+});
+
+
+  // ❌ ไม่ต้อง pop ที่นี่
+},
+
                   ),
                 ],
               ),
-
-              const SizedBox(height: 10),
-
-              // 🔹 ภาพตัวอย่าง
-              Center(
-                child: Container(
-                  width: 120,
-                  height: 100,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[200],
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(
-                    Icons.image_outlined,
-                    size: 48,
-                    color: Colors.grey,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-
-              // 🔹 Asset name
-              const Text("Asset name"),
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                  hintText: 'Enter asset name',
-                ),
-              ),
-              const SizedBox(height: 12),
-
-              // 🔹 Description
-              const Text("Description"),
-              TextField(
-                controller: descController,
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                  hintText: 'Enter description',
-                ),
-                maxLines: 2,
-              ),
-              const SizedBox(height: 12),
-
-              // 🔹 Status dropdown
-              const Text("Status"),
-              DropdownButtonFormField<AssetStatus>(
-                initialValue: selectedStatus,
-                items: AssetStatus.values.map((status) {
-                  return DropdownMenuItem(
-                    value: status,
-                    child: Text(status.label),
-                  );
-                }).toList(),
-                onChanged: (value) {
-                  if (value != null) {
-                    setState(() {
-                      selectedStatus = value;
-                    });
-                  }
-                },
-                decoration: const InputDecoration(border: OutlineInputBorder()),
-              ),
-            ],
-          ),
+            )
+          ],
         ),
       ),
-
-      // 🔹 ปุ่ม Cancel / Save
-      actionsAlignment: MainAxisAlignment.end,
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text("Cancel"),
-        ),
-        ElevatedButton(
-          onPressed: () {
-            final updatedAsset = {
-              ...widget.asset,
-              'name': nameController.text,
-              'description': descController.text,
-              'status': selectedStatus,
-            };
-            widget.onSave(updatedAsset);
-            Navigator.of(context).pop();
-          },
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.blueAccent,
-            foregroundColor: Colors.white,
-          ),
-          child: const Text("Save changes"),
-        ),
-      ],
     );
   }
 }

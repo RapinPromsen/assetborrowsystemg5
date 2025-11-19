@@ -15,6 +15,7 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
+
 // ดึงรายการครุภัณฑ์
 router.get("/assets", verifyToken, (req, res) => {
   const userId = req.user.id;
@@ -27,22 +28,29 @@ router.get("/assets", verifyToken, (req, res) => {
     // 🧩 นักเรียนเห็นเฉพาะสินทรัพย์ที่ตัวเองยืมหรือว่าง
     sql = `
       SELECT 
-        a.id, a.name, a.image_url, a.description,
+        a.id,
+        a.name,
+        a.image_url,
+        a.description,
         CASE
           WHEN br.requester_id = ? AND br.status = 'pending' THEN 'pending'
           WHEN br.requester_id = ? AND br.status = 'approved' THEN 'borrowed'
           ELSE a.status
-        END AS status
+        END AS status,
+        DATE_FORMAT(br.borrow_date, '%Y-%m-%d') AS borrow_date,   -- ✅ เพิ่ม
+        DATE_FORMAT(br.return_date, '%Y-%m-%d') AS return_date    -- ✅ เพิ่ม
       FROM assets a
       LEFT JOIN borrow_requests br 
-        ON a.id = br.asset_id 
-        AND br.status IN ('pending', 'approved')
-      WHERE a.status != 'disabled'
+  ON a.id = br.asset_id 
+  AND br.status IN ('pending', 'approved', 'borrowed')
+WHERE a.status != 'disabled'
+  AND (br.status IS NULL OR br.status NOT IN ('returned', 'rejected'))
+
     `;
     params = [userId, userId];
 
   } else if (userRole === "LECTURER" || userRole === "STAFF") {
-    // 👨‍🏫 Lecturer และ 🧑‍🔧 Staff เห็นทุกสินทรัพย์ + request_id
+    // 👨‍🏫 Lecturer / 🧑‍🔧 Staff เห็นทุกสินทรัพย์
     sql = `
       SELECT 
         a.id AS asset_id,
@@ -53,11 +61,13 @@ router.get("/assets", verifyToken, (req, res) => {
         br.id AS request_id,
         br.requester_id,
         u.full_name AS student_name,
-        br.status AS request_status
+        br.status AS request_status,
+        DATE_FORMAT(br.borrow_date, '%Y-%m-%d') AS borrow_date,   -- ✅ เพิ่ม
+        DATE_FORMAT(br.return_date, '%Y-%m-%d') AS return_date    -- ✅ เพิ่ม
       FROM assets a
       LEFT JOIN borrow_requests br 
         ON a.id = br.asset_id 
-        AND br.status IN ('pending', 'approved', 'borrowed')
+        AND br.status IN ('pending', 'approved', 'borrowed', 'returned')
       LEFT JOIN users u 
         ON br.requester_id = u.id
       ORDER BY a.id ASC
@@ -72,12 +82,15 @@ router.get("/assets", verifyToken, (req, res) => {
 
     console.log(`📦 [ASSETS] Role=${userRole} | UserID=${userId} | ${results.length} records fetched`);
     results.forEach((r) => {
-      console.log(`   🔹 Asset #${r.asset_id || r.id} (${r.asset_name || r.name}) → ${r.asset_status || r.status}`);
+      console.log(
+        `   🔹 Asset #${r.asset_id || r.id} (${r.asset_name || r.name}) → ${r.asset_status || r.status}`
+      );
     });
 
     res.json(results);
   });
 });
+
 
 
 
@@ -142,8 +155,8 @@ router.post(
 );
 
 // แก้ไขครุภัณฑ์ (เฉพาะ Staff)
-// แก้ไขครุภัณฑ์ (เฉพาะ Staff)
-router.put(
+// แก้ไขครุภัณฑ์ (เฉพาะ Staff) — PATCH รองรับ multipart
+router.patch(
   "/assets/:id",
   verifyToken,
   authorizeRole("STAFF"),
@@ -151,75 +164,101 @@ router.put(
   (req, res) => {
     const { id } = req.params;
     let { name, description, status } = req.body;
-    const imageUrl = req.file ? `/uploads/${req.file.filename}` : null;
 
-    console.log(`🟡 [UPDATE] Asset #${id} → name="${name}", status="${status}"`);
+    console.log("----------- PATCH /assets/:id -----------");
+    console.log("Incoming fields:", req.body);
+    console.log("Incoming file:", req.file);
 
-    // ✅ ตรวจสอบค่า status ก่อนอัปเดต (กัน error ENUM)
+    const newImageUrl = req.file ? `/uploads/${req.file.filename}` : null;
+
     const validStatuses = ["available", "pending", "borrowed", "disabled"];
     if (!validStatuses.includes((status || "").toLowerCase())) {
-      console.warn(
-        `⚠️ [UPDATE] Invalid status '${status}' → defaulted to 'available'`
-      );
+      console.log("Invalid status received → forcing available");
       status = "available";
     }
 
-    // ✅ ดึงชื่อไฟล์เก่าก่อนอัปเดต
-    const getOldImageSql = "SELECT image_url FROM assets WHERE id = ?";
-    db.query(getOldImageSql, [id], (err, results) => {
+    // ดึงรูปเก่า
+    db.query("SELECT image_url FROM assets WHERE id = ?", [id], (err, result) => {
       if (err) {
-        console.error("❌ Database Error (getOldImage):", err);
+        console.log("DB error getOldImage:", err);
         return res.status(500).json({ message: "Database error" });
       }
+      if (!result.length) {
+        console.log("Asset not found:", id);
+        return res.status(404).json({ message: "Asset not found" });
+      }
 
-      const oldImagePath = results[0]?.image_url;
+      const oldImage = result[0].image_url;
+      console.log("Old image:", oldImage);
 
-      // ✅ เตรียมคำสั่ง SQL
-      const sql = imageUrl
+      const sql = newImageUrl
         ? "UPDATE assets SET name=?, description=?, status=?, image_url=? WHERE id=?"
         : "UPDATE assets SET name=?, description=?, status=? WHERE id=?";
 
-      const values = imageUrl
-        ? [name, description, status, imageUrl, id]
+      const data = newImageUrl
+        ? [name, description, status, newImageUrl, id]
         : [name, description, status, id];
 
-      console.log("🧩 [UPDATE] SQL:", sql);
-      console.log("🧩 [UPDATE] Values:", values);
+      console.log("SQL:", sql);
+      console.log("Data:", data);
 
-      db.query(sql, values, (err) => {
-        if (err) {
-          console.error("❌ Database Error (update):", err);
+      db.query(sql, data, (err2) => {
+        if (err2) {
+          console.log("DB error update:", err2);
           return res.status(500).json({ message: "Database error" });
         }
 
-        // ✅ ลบรูปเก่า (เฉพาะกรณีที่อัปโหลดใหม่)
-        if (
-          imageUrl &&
-          oldImagePath &&
-          fs.existsSync(path.join(process.cwd(), oldImagePath))
-        ) {
-          fs.unlink(path.join(process.cwd(), oldImagePath), (err) => {
-            if (err)
-              console.error("⚠️ Failed to delete old image:", err);
-            else console.log(`🗑️ Deleted old image: ${oldImagePath}`);
-          });
+        // ลบไฟล์เก่าถ้ามีรูปใหม่อัปมาแทน
+        if (newImageUrl && oldImage) {
+          const oldPath = path.join(process.cwd(), oldImage);
+          console.log("Deleting old file:", oldPath);
+
+          if (fs.existsSync(oldPath)) fs.unlink(oldPath, () => {});
         }
 
-        console.log(`✅ [UPDATE] Asset #${id} updated successfully`);
-        res.json({ message: "✅ Asset updated successfully" });
+        return res.json({
+          message: "PATCH updated successfully",
+          updated: {
+            id,
+            name,
+            description,
+            status,
+            image_url: newImageUrl || oldImage,
+          },
+        });
       });
     });
   }
 );
 
 
-// ลบครุภัณฑ์ (เฉพาะ Staff)
-router.delete("/assets/:id", verifyToken, authorizeRole("STAFF"), (req, res) => {
-  const { id } = req.params;
-  db.query("DELETE FROM assets WHERE id=?", [id], (err) => {
-    if (err) return res.status(500).json({ message: "Database error" });
-    res.json({ message: "Asset deleted successfully" });
-  });
-});
+
+router.delete(
+  "/assets/:id",
+  verifyToken,
+  authorizeRole("STAFF"),
+  (req, res) => {
+    const { id } = req.params;
+
+    db.query("SELECT image_url FROM assets WHERE id = ?", [id], (err, results) => {
+      if (err) return res.status(500).json({ message: "Database error" });
+      if (!results.length) return res.status(404).json({ message: "Asset not found" });
+
+      const imageUrl = results[0].image_url;
+
+      db.query("DELETE FROM assets WHERE id=?", [id], (err) => {
+        if (err) return res.status(500).json({ message: "Database error" });
+
+        if (imageUrl) {
+          const filePath = path.join(process.cwd(), imageUrl);
+          if (fs.existsSync(filePath)) fs.unlink(filePath, () => {});
+        }
+
+        res.json({ message: "Asset deleted successfully" });
+      });
+    });
+  }
+);
+
 
 export default router;
