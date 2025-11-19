@@ -116,7 +116,7 @@ Future<void> _fetchAssets() async {
       case 'borrowed':
         return AssetStatus.borrowed;
       case 'disabled':
-        return AssetStatus.disable;
+        return AssetStatus.disabled;
       default:
         return AssetStatus.available;
     }

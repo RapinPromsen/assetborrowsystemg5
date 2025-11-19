@@ -97,7 +97,7 @@ class _StaffAssetListState extends State<StaffAssetList> {
       case 'borrowed':
         return AssetStatus.borrowed;
       case 'disabled':
-        return AssetStatus.disable;
+        return AssetStatus.disabled;
       default:
         return AssetStatus.available;
     }
@@ -355,7 +355,10 @@ class _StaffAssetListState extends State<StaffAssetList> {
                 // ส่งเข้า UI ใหม่
                 'name': updatedAsset['name'],
                 'description': updatedAsset['description'],
-                'status': updatedAsset['status'],
+                'status': updatedAsset['status'] is AssetStatus
+    ? updatedAsset['status']
+    : _parseStatus(updatedAsset['status'].toString()),
+
 
                 // ถ้ามีไฟล์ใหม่ → แสดงรูปใหม่
                 'image': updatedAsset['image_url'] != null

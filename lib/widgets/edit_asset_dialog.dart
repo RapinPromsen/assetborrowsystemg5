@@ -70,7 +70,6 @@ class _EditAssetDialogState extends State<EditAssetDialog> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // 🔹 หัวข้อ + Delete
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -80,41 +79,7 @@ class _EditAssetDialogState extends State<EditAssetDialog> {
                             fontWeight: FontWeight.bold,
                             fontSize: 20,
                           ),
-                        ),
-
-                        // ปุ่ม delete
-                        if (widget.onDelete != null)
-                          IconButton(
-                            icon: const Icon(Icons.delete_outline, color: Colors.red),
-                            onPressed: () async {
-                              final confirm = await showDialog<bool>(
-                                context: context,
-                                builder: (_) => AlertDialog(
-                                  title: const Text("Confirm Delete"),
-                                  content: const Text("Are you sure you want to delete this asset?"),
-                                  actions: [
-                                    TextButton(
-                                      child: const Text("Cancel"),
-                                      onPressed: () => Navigator.pop(context, false),
-                                    ),
-                                    ElevatedButton(
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: Colors.red,
-                                        foregroundColor: Colors.white,
-                                      ),
-                                      child: const Text("Delete"),
-                                      onPressed: () => Navigator.pop(context, true),
-                                    ),
-                                  ],
-                                ),
-                              );
-
-                              if (confirm == true && widget.onDelete != null) {
-                                Navigator.pop(context);
-                                widget.onDelete!(widget.asset);
-                              }
-                            },
-                          ),
+                        )
                       ],
                     ),
                     const SizedBox(height: 16),
@@ -169,24 +134,32 @@ class _EditAssetDialogState extends State<EditAssetDialog> {
                     const SizedBox(height: 16),
 
                     // 🔹 Status dropdown
-                    const Text("Status"),
-                    DropdownButtonFormField<AssetStatus>(
-                      value: selectedStatus,
-                      decoration: const InputDecoration(
-                        border: OutlineInputBorder(),
-                      ),
-                      items: AssetStatus.values.map((s) {
-                        return DropdownMenuItem(
-                          value: s,
-                          child: Text(s.label),
-                        );
-                      }).toList(),
-                      onChanged: (value) {
-                        if (value != null) {
-                          setState(() => selectedStatus = value);
-                        }
-                      },
-                    ),
+                   // 🔹 Status dropdown
+const Text("Status"),
+DropdownButtonFormField<AssetStatus>(
+  value: selectedStatus,
+  decoration: const InputDecoration(
+    border: OutlineInputBorder(),
+  ),
+
+  // ⭐ แสดงเฉพาะ Available + Disable เท่านั้น
+  items: [
+    AssetStatus.available,
+    AssetStatus.disabled,
+  ].map((s) {
+    return DropdownMenuItem(
+      value: s,
+      child: Text(s.label),
+    );
+  }).toList(),
+
+  onChanged: (value) {
+    if (value != null) {
+      setState(() => selectedStatus = value);
+    }
+  },
+),
+
                   ],
                 ),
               ),

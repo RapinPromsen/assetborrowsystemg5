@@ -14,7 +14,7 @@ class Asset {
 
 enum AssetStatus {
   available,
-  disable,
+  disabled,
   pending,
   borrowed,
 }
@@ -24,7 +24,7 @@ extension AssetStatusExtension on AssetStatus {
     switch (this) {
       case AssetStatus.available:
         return 'Available';
-      case AssetStatus.disable:
+      case AssetStatus.disabled:
         return 'Disable';
       case AssetStatus.pending:
         return 'Pending';
@@ -37,7 +37,7 @@ extension AssetStatusExtension on AssetStatus {
     switch (this) {
       case AssetStatus.available:
         return const Color(0xFF22C55E);
-      case AssetStatus.disable:
+      case AssetStatus.disabled:
         return const Color(0xFFEF4444);
       case AssetStatus.pending:
         return const Color(0xFFFBBF24);

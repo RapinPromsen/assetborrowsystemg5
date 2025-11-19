@@ -12,7 +12,7 @@ class AssetsScreen extends StatefulWidget {
 class _AssetsScreenState extends State<AssetsScreen> {
   final List<Asset> assets = [
     Asset(id: 1, name: 'Fundamental\nElectrical', status: AssetStatus.available),
-    Asset(id: 2, name: 'Artificial\nintelligence', status: AssetStatus.disable),
+    Asset(id: 2, name: 'Artificial\nintelligence', status: AssetStatus.disabled),
     Asset(id: 3, name: 'Internet of thing', status: AssetStatus.pending),
     Asset(id: 4, name: 'Book', status: AssetStatus.borrowed),
   ];
