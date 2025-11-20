@@ -98,7 +98,7 @@ static Future<Map<String, dynamic>> returnAsset(int requestId, {String? note}) a
   final token = prefs.getString('token');
   if (token == null) throw Exception("Token not found");
 
-  final url = Uri.parse('$baseUrl/borrow/return/$requestId'); // ✅ endpoint ใหม่ที่สอดคล้อง
+  final url = Uri.parse('$baseUrl/return/$requestId'); // ✅ ตรงกับ backend
   print("♻️ [PUT] $url");
 
   final response = await http.put(
@@ -107,7 +107,6 @@ static Future<Map<String, dynamic>> returnAsset(int requestId, {String? note}) a
       'Content-Type': 'application/json',
       'Authorization': 'Bearer $token',
     },
-    // ✅ ส่ง note (หากมี) ไปด้วย
     body: jsonEncode({
       if (note != null && note.isNotEmpty) 'note': note,
     }),
@@ -119,7 +118,6 @@ static Future<Map<String, dynamic>> returnAsset(int requestId, {String? note}) a
   final data = jsonDecode(response.body);
 
   if (response.statusCode == 200) {
-    // ✅ backend จะส่งข้อมูลสถานะใหม่ เช่น { status: "returned", got_back_by: "Staff A", message: "Returned successfully" }
     return {
       'message': data['message'] ?? 'Return success',
       'status': data['status'] ?? 'returned',
@@ -130,5 +128,6 @@ static Future<Map<String, dynamic>> returnAsset(int requestId, {String? note}) a
 
   throw Exception(data['message'] ?? 'Return failed');
 }
+
 
 }

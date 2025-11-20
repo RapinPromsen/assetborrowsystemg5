@@ -10,6 +10,7 @@ import '../../widgets/add_asset_dialog.dart';
 import '../../widgets/borrowed_detail_dialog.dart';
 import '../../widgets/pending_detail_dialog.dart';   
 import '../../services/api_service.dart';
+import '../../widgets/return_asset_dialog.dart';   
 
 class StaffAssetList extends StatefulWidget {
   final String fullName;
@@ -62,6 +63,7 @@ class _StaffAssetListState extends State<StaffAssetList> {
               'status': _parseStatus(item['asset_status'] ?? item['status']),
               'image': imagePath,
               'description': item['description'] ?? '',
+               'request_id': item['request_id'],
             };
           }).toList();
 
@@ -230,12 +232,29 @@ class _StaffAssetListState extends State<StaffAssetList> {
     );
   } 
   else if (status == AssetStatus.borrowed) {
-    // ไป borrowed detail
-    showDialog(
-      context: context,
-      builder: (context) => BorrowedDetailDialog(asset: asset),
-    );
-  } 
+  // ⭐ Staff เปิด ReturnAssetDialog ทันที
+  showDialog(
+    context: context,
+    builder: (context) => ReturnAssetDialog(
+      requestId: asset['request_id'],
+      assetName: asset['name'],
+      onReturned: () {
+        // อัปเดต UI หลังคืนสำเร็จ
+        setState(() {
+          asset['status'] = AssetStatus.available;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Returned successfully"),
+            backgroundColor: Colors.green,
+          ),
+        );
+      },
+    ),
+  );
+}
+
   else {
     // available / disabled → แก้ไขได้
     _openEditDialog(asset);

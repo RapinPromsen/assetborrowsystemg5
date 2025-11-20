@@ -25,54 +25,84 @@ router.get("/assets", verifyToken, (req, res) => {
   let params = [];
 
   if (userRole === "STUDENT") {
-    // 🧩 นักเรียนเห็นเฉพาะสินทรัพย์ที่ตัวเองยืมหรือว่าง
-    sql = `
-      SELECT 
-        a.id,
-        a.name,
-        a.image_url,
-        a.description,
-        CASE
-          WHEN br.requester_id = ? AND br.status = 'pending' THEN 'pending'
-          WHEN br.requester_id = ? AND br.status = 'approved' THEN 'borrowed'
-          ELSE a.status
-        END AS status,
-        DATE_FORMAT(br.borrow_date, '%Y-%m-%d') AS borrow_date,   -- ✅ เพิ่ม
-        DATE_FORMAT(br.return_date, '%Y-%m-%d') AS return_date    -- ✅ เพิ่ม
-      FROM assets a
-      LEFT JOIN borrow_requests br 
-  ON a.id = br.asset_id 
-  AND br.status IN ('pending', 'approved', 'borrowed')
-WHERE a.status != 'disabled'
-  AND (br.status IS NULL OR br.status NOT IN ('returned', 'rejected'))
+  sql = `
+    SELECT 
+      a.id,
+      a.name,
+      a.image_url,
+      a.description,
 
-    `;
-    params = [userId, userId];
+      CASE
+        WHEN br.requester_id = ? AND br.status = 'pending' THEN 'pending'
+        WHEN br.requester_id = ? AND br.status = 'approved' THEN 'borrowed'
+        WHEN br.requester_id = ? AND br.status = 'borrowed' THEN 'borrowed'
+        ELSE a.status
+      END AS status,
 
-  } else if (userRole === "LECTURER" || userRole === "STAFF") {
-    // 👨‍🏫 Lecturer / 🧑‍🔧 Staff เห็นทุกสินทรัพย์
-    sql = `
-      SELECT 
-        a.id AS asset_id,
-        a.name AS asset_name,
-        a.image_url,
-        a.description,
-        a.status AS asset_status,
-        br.id AS request_id,
-        br.requester_id,
-        u.full_name AS student_name,
-        br.status AS request_status,
-        DATE_FORMAT(br.borrow_date, '%Y-%m-%d') AS borrow_date,   -- ✅ เพิ่ม
-        DATE_FORMAT(br.return_date, '%Y-%m-%d') AS return_date    -- ✅ เพิ่ม
-      FROM assets a
-      LEFT JOIN borrow_requests br 
-        ON a.id = br.asset_id 
-        AND br.status IN ('pending', 'approved', 'borrowed', 'returned')
-      LEFT JOIN users u 
-        ON br.requester_id = u.id
-      ORDER BY a.id ASC
-    `;
-  }
+      DATE_FORMAT(br.borrow_date, '%Y-%m-%d') AS borrow_date,
+      DATE_FORMAT(br.return_date, '%Y-%m-%d') AS return_date
+
+    FROM assets a
+    LEFT JOIN (
+      SELECT br1.*
+      FROM borrow_requests br1
+      JOIN (
+        SELECT asset_id, MAX(id) AS latest_id
+        FROM borrow_requests
+        GROUP BY asset_id
+      ) x ON br1.id = x.latest_id
+    ) br ON br.asset_id = a.id
+
+    WHERE a.status != 'disabled'
+  `;
+
+  params = [userId, userId, userId];
+} else if (userRole === "LECTURER" || userRole === "STAFF") {
+  sql = `
+    SELECT
+      a.id AS asset_id,
+      a.name AS asset_name,
+      a.image_url,
+      a.description,
+
+      -- ใช้สถานะล่าสุด ถ้าไม่มี → ใช้สถานะใน assets
+      COALESCE(
+   CASE 
+     WHEN br_latest.status = 'approved' THEN 'borrowed'
+     ELSE br_latest.status
+   END,
+   a.status
+) AS asset_status
+,
+
+      br_latest.id AS request_id,
+      br_latest.requester_id,
+      u.full_name AS student_name,
+
+      DATE_FORMAT(br_latest.borrow_date, '%Y-%m-%d') AS borrow_date,
+      DATE_FORMAT(br_latest.return_date, '%Y-%m-%d') AS return_date
+
+    FROM assets a
+
+    LEFT JOIN (
+      SELECT br1.*
+      FROM borrow_requests br1
+      JOIN (
+        SELECT asset_id, MAX(id) AS latest_id
+        FROM borrow_requests
+        GROUP BY asset_id
+      ) x ON br1.id = x.latest_id
+    ) br_latest ON br_latest.asset_id = a.id
+
+    LEFT JOIN users u ON u.id = br_latest.requester_id
+
+    ORDER BY a.id ASC;
+  `;
+}
+
+
+
+
 
   db.query(sql, params, (err, results) => {
     if (err) {

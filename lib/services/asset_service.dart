@@ -36,6 +36,47 @@ class AssetService {
     }
   }
 
+// --------------------------
+// ADD ASSET (POST + multipart)
+// --------------------------
+static Future<Map<String, dynamic>?> addAsset(Map<String, dynamic> asset) async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString("token");
+    if (token == null) throw Exception("Token not found");
+
+    final uri = Uri.parse("${ApiService.baseUrl}/assets");
+    final request = http.MultipartRequest("POST", uri);
+
+    request.headers['Authorization'] = "Bearer $token";
+
+    request.fields["name"] = asset["name"] ?? "";
+    request.fields["status"] = asset["status"] ?? "available";
+
+    // ถ้ามีไฟล์รูป
+    if (asset["imageFile"] != null && asset["imageFile"] is File) {
+      request.files.add(await http.MultipartFile.fromPath(
+        "image",
+        (asset["imageFile"] as File).path,
+      ));
+    }
+
+    final streamed = await request.send();
+    final response = await http.Response.fromStream(streamed);
+
+    if (response.statusCode == 201) {
+      return jsonDecode(response.body)["asset"];
+    }
+
+    print("❌ Add failed: ${response.body}");
+    return null;
+
+  } catch (e) {
+    print("❌ Add Error: $e");
+    return null;
+  }
+}
+
  // --------------------------
 // 2) UPDATE asset (PUT + multipart)
 // --------------------------

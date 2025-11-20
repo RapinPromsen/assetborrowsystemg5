@@ -1,5 +1,9 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import '../models/asset.dart';
+import '../services/asset_service.dart';
+import '../services/api_service.dart';
 
 class AddAssetDialog extends StatefulWidget {
   final void Function(Map<String, dynamic> newAsset) onAdd;
@@ -15,146 +19,188 @@ class _AddAssetDialogState extends State<AddAssetDialog> {
   final TextEditingController descController = TextEditingController();
   AssetStatus selectedStatus = AssetStatus.available;
 
+  File? pickedImage;
+
+  Future<void> pickImage() async {
+    final picker = ImagePicker();
+    final file = await picker.pickImage(source: ImageSource.gallery);
+
+    if (file != null) {
+      setState(() => pickedImage = File(file.path));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      insetPadding: const EdgeInsets.symmetric(horizontal: 40, vertical: 24),
+      backgroundColor: Colors.white,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(
-          maxWidth: 340,
-        ),
-        child: IntrinsicHeight( // ✅ ให้ความสูงพอดีกับเนื้อหา
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // 🔹 หัวข้อ + ปุ่มปิด
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        constraints: const BoxConstraints(maxWidth: 420),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // ==========================
+            // Scrollable content
+            // ==========================
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // Title
                     const Text(
-                      'Add new asset',
+                      "Add New Asset",
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
-                        fontSize: 18,
+                        fontSize: 20,
                       ),
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.close, color: Colors.black54),
-                      onPressed: () => Navigator.of(context).pop(),
+
+                    const SizedBox(height: 16),
+
+                    // Image Picker
+                    Center(
+                      child: InkWell(
+                        onTap: pickImage,
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          width: 140,
+                          height: 120,
+                          decoration: BoxDecoration(
+                            color: Colors.grey[200],
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: pickedImage != null
+                              ? ClipRRect(
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Image.file(
+                                    pickedImage!,
+                                    fit: BoxFit.cover,
+                                  ),
+                                )
+                              : const Icon(Icons.add_photo_alternate,
+                                  size: 50, color: Colors.grey),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // Name
+                    const Text("Asset name"),
+                    TextField(
+                      controller: nameController,
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                        hintText: "Enter asset name",
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // Description
+                    const Text("Description"),
+                    TextField(
+                      controller: descController,
+                      maxLines: 2,
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                        hintText: "Enter description",
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // Status dropdown
+                    const Text("Status"),
+                    DropdownButtonFormField<AssetStatus>(
+                      value: selectedStatus,
+                      items: const [
+                        DropdownMenuItem(
+                          value: AssetStatus.available,
+                          child: Text("Available"),
+                        ),
+                        DropdownMenuItem(
+                          value: AssetStatus.disabled,
+                          child: Text("Disabled"),
+                        ),
+                      ],
+                      onChanged: (value) =>
+                          setState(() => selectedStatus = value!),
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                      ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 10),
-
-                // 🔹 รูปภาพ
-                Center(
-                  child: Container(
-                    width: 120,
-                    height: 100,
-                    decoration: BoxDecoration(
-                      color: Colors.grey[200],
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Icon(
-                      Icons.image_outlined,
-                      size: 48,
-                      color: Colors.grey,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                // 🔹 Asset name
-                const Text("Asset name"),
-                TextField(
-                  controller: nameController,
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
-                    hintText: 'Enter asset name',
-                  ),
-                ),
-                const SizedBox(height: 12),
-
-                // 🔹 Description
-                const Text("Description"),
-                TextField(
-                  controller: descController,
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
-                    hintText: 'Enter description',
-                  ),
-                  maxLines: 2,
-                ),
-                const SizedBox(height: 12),
-
-                // 🔹 Status dropdown
-                const Text("Status"),
-                DropdownButtonFormField<AssetStatus>(
-                  initialValue: selectedStatus,
-                  items: AssetStatus.values.map((status) {
-                    return DropdownMenuItem(
-                      value: status,
-                      child: Text(status.label),
-                    );
-                  }).toList(),
-                  onChanged: (value) {
-                    if (value != null) {
-                      setState(() {
-                        selectedStatus = value;
-                      });
-                    }
-                  },
-                  decoration: const InputDecoration(border: OutlineInputBorder()),
-                ),
-                const SizedBox(height: 20),
-
-                // 🔹 ปุ่ม Action
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      TextButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        child: const Text("Cancel"),
-                      ),
-                      const SizedBox(width: 8),
-                      ElevatedButton(
-                        onPressed: () {
-                          if (nameController.text.trim().isEmpty) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text("Please enter asset name")),
-                            );
-                            return;
-                          }
-
-                          final newAsset = {
-                            'id': DateTime.now().millisecondsSinceEpoch,
-                            'name': nameController.text.trim(),
-                            'description': descController.text.trim(),
-                            'status': selectedStatus,
-                            'image':
-                                'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=400',
-                          };
-                          widget.onAdd(newAsset);
-                          Navigator.of(context).pop();
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green,
-                          foregroundColor: Colors.white,
-                        ),
-                        child: const Text("Add asset"),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+              ),
             ),
-          ),
+
+            // ==========================
+            // Bottom Buttons (fixed)
+            // ==========================
+            Padding(
+              padding: const EdgeInsets.only(
+                  bottom: 20, left: 20, right: 20, top: 12),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    child: const Text("Cancel"),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                  const SizedBox(width: 12),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
+                      foregroundColor: Colors.white,
+                    ),
+                    child: const Text("Add"),
+                    onPressed: () async {
+                      if (nameController.text.trim().isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                              content: Text("Please enter asset name")),
+                        );
+                        return;
+                      }
+
+                      // Call backend
+                      final saved = await AssetService.addAsset({
+                        "name": nameController.text.trim(),
+                        "description": descController.text.trim(),
+                        "status": selectedStatus.name.toLowerCase(),
+                        "imageFile": pickedImage,
+                      });
+
+                      if (saved == null) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                              content: Text("Failed to add asset"),
+                              backgroundColor: Colors.red),
+                        );
+                        return;
+                      }
+
+                      widget.onAdd({
+                        "id": saved["id"],
+                        "name": nameController.text.trim(),
+                        "description": descController.text.trim(),
+                        "status": selectedStatus,
+                        "image":
+                            "${ApiService.baseImageUrl}${saved['image_url']}",
+                      });
+
+                      Navigator.pop(context);
+                    },
+                  ),
+                ],
+              ),
+            )
+          ],
         ),
       ),
     );

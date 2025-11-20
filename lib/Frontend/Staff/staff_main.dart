@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'staff_asset_list.dart';
 import '../../shared/dashboard.dart';
 import 'staff_history.dart';
-import 'staff_return_asset.dart';
 
 class StaffMain extends StatefulWidget {  // ✅ เพิ่มคลาสนี้
   final String fullName;
@@ -22,8 +21,7 @@ class _StaffMainState extends State<StaffMain> {
     final List<Widget> pages = [
       StaffAssetList(fullName: widget.fullName), // ส่ง fullName และ role
       Dashboard(fullName: widget.fullName, role: widget.role), // ส่ง fullName และ role
-      StaffHistory(fullName: widget.fullName),
-      StaffReturnAsset(fullName: widget.fullName),
+      StaffHistory(fullName: widget.fullName)
     ];
 
     return Scaffold(
@@ -49,10 +47,6 @@ class _StaffMainState extends State<StaffMain> {
           BottomNavigationBarItem(
             icon: Icon(Icons.history),
             label: 'History',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.assignment_return),
-            label: 'Return',
           ),
         ],
       ),

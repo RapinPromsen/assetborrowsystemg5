@@ -29,6 +29,8 @@ router.post("/borrow", verifyToken, authorizeRole("STUDENT"), (req, res) => {
 `;
 
 
+
+
   db.query(checkExistingSql, [student_id], (err, existingResult) => {
     if (err) {
       console.error("❌ [DB] Check existing borrow failed:", err);
